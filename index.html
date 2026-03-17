@@ -19,46 +19,53 @@
 
         .main-container { display: grid; grid-template-columns: 260px 1fr 260px; flex-grow: 1; overflow: hidden; }
         
-        /* Sidebar Navigation */
         .sidebar { background: var(--panel); border-right: 1px solid var(--border); padding: 15px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
-        .section-title { color: #555; font-size: 0.6rem; letter-spacing: 1.2px; margin: 15px 0 5px 0; text-transform: uppercase; font-weight: 900; }
+        .section-title { color: #555; font-size: 0.65rem; letter-spacing: 1.2px; margin: 15px 0 5px 0; text-transform: uppercase; font-weight: 900; }
         
         .nav-item { padding: 10px 12px; background: #222; border-radius: 5px; cursor: pointer; transition: 0.2s; font-size: 0.8rem; border: 1px solid transparent; text-align: left; color: #aaa; width: 100%; }
         .nav-item:hover { border-color: var(--accent); color: #fff; }
         .nav-item.active { background: var(--accent); color: #fff; font-weight: bold; }
+        .nav-item.finance { border-left: 3px solid #f1c40f; }
 
-        /* Editeur Principal */
         .editor-container { display: flex; flex-direction: column; background: var(--editor-bg); color: #111; position: relative; overflow-y: auto; }
         .editor-header { background: #f4f4f4; padding: 10px 20px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 5; }
-        #view-title { font-weight: bold; font-family: 'Courier New', monospace; font-size: 0.95rem; color: #333; }
+        #view-title { font-weight: bold; font-family: 'Courier New', monospace; font-size: 0.95rem; color: #333; text-transform: uppercase; }
+        #word-count { font-size: 0.75rem; color: #666; font-weight: bold; }
         
         #main-editor { flex-grow: 1; padding: 40px; font-family: 'Courier New', monospace; font-size: 1.05rem; border: none; outline: none; resize: none; line-height: 1.6; min-height: 100%; color: #111; }
 
-        /* Storyboard Grid */
-        #storyboard-container { display: none; padding: 30px; background: #000; border-top: 4px solid var(--accent); grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; }
-        .storyboard-img { width: 100%; border-radius: 6px; box-shadow: 0 10px 25px rgba(0,0,0,0.6); border: 1px solid #333; transition: 0.3s; }
+        #storyboard-container { display: none; padding: 30px; background: #000; border-top: 4px solid var(--accent); grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; align-content: start; }
+        .storyboard-img { width: 100%; border-radius: 6px; box-shadow: 0 10px 25px rgba(0,0,0,0.6); border: 1px solid #333; transition: transform 0.3s; }
+        .storyboard-img:hover { transform: scale(1.02); border-color: var(--accent); }
 
-        /* Barre de Contrôle */
         .control-bar { background: #000; padding: 15px 25px; border-top: 1px solid var(--border); display: flex; gap: 15px; align-items: center; }
-        textarea.book-input { flex-grow: 1; height: 50px; background: #1a1a1a; border: 1px solid #333; color: white; padding: 10px; border-radius: 6px; font-size: 0.85rem; resize: none; }
+        textarea.book-input { flex-grow: 1; height: 50px; background: #1a1a1a; border: 1px solid #333; color: white; padding: 10px; border-radius: 6px; font-size: 0.85rem; resize: none; transition: all 0.2s; }
+        textarea.book-input:focus { outline: none; border-color: var(--accent); }
         textarea.book-input.dragover { border: 2px dashed var(--accent); background: #2a1616; }
         
         button { padding: 10px 18px; border-radius: 4px; cursor: pointer; border: none; font-weight: bold; transition: 0.2s; font-size: 0.75rem; text-transform: uppercase; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-primary { background: var(--accent); color: white; height: 50px; min-width: 220px; }
+        .btn-primary:hover:not(:disabled) { filter: brightness(1.1); }
         .btn-secondary { background: #333; color: #ccc; border: 1px solid #444; width: 100%; margin-top: 5px; }
-        .btn-pdf { background: #2980b9; color: white; }
+        .btn-secondary:hover { background: #444; color: #fff; }
+        .btn-pdf { background: #2980b9; color: white; border: none; }
+        .btn-pdf:hover { background: #3498db; }
+        .btn-pitch { background: #27ae60; color: white; border: none; }
+        .btn-pitch:hover { background: #2ecc71; }
 
-        /* Loader */
         .loading-overlay { position: absolute; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.95); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 100; text-align: center; color: white; }
-        .spinner { width: 40px; height: 40px; border: 3px solid #333; border-top: 3px solid var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 15px; }
+        .spinner { width: 45px; height: 45px; border: 4px solid #333; border-top: 4px solid var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 20px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #loader-text { font-size: 1.2rem; margin: 0; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
+        #loader-sub { color: #888; font-size: 0.9rem; margin-top: 10px; }
     </style>
 </head>
 <body>
 
 <header>
-    <div class="title-bar">🎬 STUDIO IA : MASTER PRODUCTION</div>
-    <div id="model-status">MISTRAL AI READY</div>
+    <div class="title-bar">🎬 STUDIO IA : MASTER PRODUCTION - DIR. NIKO</div>
+    <div id="model-status">MISTRAL API PRÊT</div>
 </header>
 
 <div class="main-container">
@@ -73,22 +80,27 @@
         <button class="nav-item" onclick="switchView('image', event)">📸 Storyboard Visuel</button>
         <button class="nav-item" onclick="switchView('audio', event)">🔊 Sound Design</button>
         <button class="nav-item" onclick="switchView('light', event)">💡 Set-up Lumière</button>
+
+        <div class="section-title">PHASE 3 : FINANCE</div>
+        <button class="nav-item finance" onclick="switchView('budget', event)">💰 Budget & Estimations</button>
         
         <div style="flex-grow: 1;"></div>
-        <div class="section-title">EXPORTS FINALISÉS</div>
-        <button class="btn-secondary" onclick="exportDoc()">📥 DOSSIER (.txt)</button>
-        <button class="btn-secondary btn-pdf" onclick="exportScenarioPDF()">🖋️ SCÉNARIO (.pdf)</button>
+        
+        <div class="section-title">EXPORTS PRODUCTEUR</div>
+        <button class="btn-secondary btn-pitch" onclick="exportPitchDeckPDF()">📊 PITCH DECK (.pdf)</button>
+        <button class="btn-secondary btn-pdf" onclick="exportScenarioPDF()">🖋️ SCÉNARIO PRO (.pdf)</button>
     </div>
 
     <div class="editor-container">
         <div id="loader" class="loading-overlay">
             <div class="spinner"></div>
-            <h2 id="loader-text" style="font-size: 1.2rem;">CALCUL DES AGENTS...</h2>
+            <h2 id="loader-text">INITIALISATION...</h2>
+            <p id="loader-sub">Veuillez patienter.</p>
         </div>
         
         <div class="editor-header">
             <span id="view-title">ÉDITEUR : ANALYSE & BIBLE</span>
-            <div id="word-count" style="font-size: 0.7rem; color: #888;">0 mots</div>
+            <span id="word-count">0 mots</span>
         </div>
         
         <textarea id="main-editor" spellcheck="false" oninput="updateWordCount()"></textarea>
@@ -96,126 +108,179 @@
     </div>
 
     <div class="sidebar" style="border-left: 1px solid var(--border); border-right: none;">
-        <div class="section-title">CONFIGURATION</div>
-        <input type="password" id="apiKey" placeholder="Clé API Mistral" style="width: 100%; background: #222; border: 1px solid #444; color: white; padding: 10px; border-radius: 4px; box-sizing: border-box; font-size: 0.8rem;">
+        <div class="section-title">CLÉ API MISTRAL</div>
+        <input type="password" id="apiKey" placeholder="Collez votre clé ici..." style="width: 100%; background: #222; border: 1px solid #444; color: white; padding: 10px; border-radius: 4px; box-sizing: border-box; font-size: 0.8rem;">
         
-        <div class="section-title">INFOS PROJET</div>
-        <div style="font-size: 0.75rem; color: #777; line-height: 1.4;">
-            Utilisateur : <strong>Niko</strong><br>
-            Moteur : Mistral Large 2<br>
-            Export : Industry Standard
-        </div>
+        <div class="section-title">INFOS PRODUCTION</div>
+        <p style="font-size: 0.7rem; color: #999; line-height: 1.5;">
+            Générez le <strong>Pitch Deck</strong> en PDF. Il inclut une page de garde formelle, la Bible, le Budget estimatif, et tous les détails techniques formatés pour les investisseurs.
+        </p>
     </div>
 </div>
 
 <div class="control-bar">
-    <textarea class="book-input" id="bookInput" placeholder="Glissez PDF, DOCX ou TXT ici..."></textarea>
-    <button class="btn-primary" id="launchBtn">🚀 GÉNÉRER LE FILM COMPLET</button>
+    <textarea class="book-input" id="bookInput" placeholder="Glissez-déposez un livre complet (PDF, DOCX) ou du texte ici..."></textarea>
+    <button class="btn-primary" id="launchBtn">🚀 GÉNÉRER LE PITCH DECK</button>
 </div>
 
 <script type="module">
-    // --- INITIALISATION ---
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
-    let data = { bible: "", narratif: "", script: "", technique: "", image: "", audio: "", light: "" };
+    
+    let data = { bible: "", narratif: "", script: "", technique: "", image: "", audio: "", light: "", budget: "" };
     let currentView = 'bible';
 
     const AGENTS = {
-        bible: { prompt: "Tu es Script-Doctor. Extrais la Bible : Thèmes, arcs dramatiques, psychologie. Profond et analytique.", model: "mistral-large-latest" },
-        narratif: { prompt: "Tu es Scénariste. Découpe en séquences : N° - LIEU - ACTION. Rythme soutenu.", model: "mistral-small-latest" },
-        script: { prompt: "Tu es Dialoguiste. Rédige au format FOUNTAIN. MAJUSCULES pour noms, actions visuelles.", model: "mistral-large-latest" },
-        technique: { prompt: "Tu es Assistant Réal. Crée la Shot List détaillée (Valeur de plan, angle).", model: "mistral-small-latest" },
-        image: { prompt: "Tu es Chef Opérateur. Génère 4 PROMPTS anglais de storyboard entre [PROMPT: et ].", model: "mistral-small-latest" },
-        audio: { prompt: "Tu es Sound Designer. Liste ambiances, SFX et Soundscape.", model: "mistral-small-latest" },
-        light: { prompt: "Tu es Chef Électricien. Détaille le set-up lumière pro.", model: "mistral-small-latest" }
+        narratif: { prompt: "Tu es Scénariste. Transforme la Bible en séquences cinématographiques. Format : SÉQUENCE N° - LIEU - ACTION SYNTHÉTIQUE.", model: "mistral-large-latest" },
+        script: { prompt: "Tu es Dialoguiste. Rédige le scénario STRICTEMENT au format FOUNTAIN. MAJUSCULES pour les personnages, actions au présent, format texte brut.", model: "mistral-large-latest" },
+        technique: { prompt: "Tu es Assistant Réal. Crée une Shot List détaillée (Valeur de plan, mouvement, focale) basée sur le script.", model: "mistral-small-latest" },
+        image: { prompt: "Tu es Chef Opérateur. À la fin de ton analyse, génère EXACTEMENT 4 PROMPTS visuels en anglais, encadrés par [PROMPT: et ].", model: "mistral-small-latest" },
+        audio: { prompt: "Tu es Sound Designer. Liste les ambiances continues, les effets synchrones (SFX) et le soundscape.", model: "mistral-small-latest" },
+        light: { prompt: "Tu es Chef Électricien. Détaille le set-up lumière technique.", model: "mistral-small-latest" },
+        budget: { prompt: "Tu es Directeur de Production (Line Producer). Analyse ce projet. Génère un 'Top-Sheet Budget' professionnel incluant : 1. Estimation jours de tournage. 2. Répartition financière. 3. Complexité logistique. 4. Fourchette budgétaire globale en Euros (€). Présente cela clairement.", model: "mistral-large-latest" }
     };
 
-    // --- LOGIQUE MISTRAL ---
-    async function callMistral(agentKey, content) {
-        const key = document.getElementById("apiKey").value;
-        if(!key) throw new Error("Veuillez entrer votre clé API Mistral.");
+    async function callMistral(systemPrompt, userContent, model) {
+        const key = document.getElementById("apiKey").value.trim();
+        if(!key) throw new Error("Clé API Mistral manquante. Veuillez la renseigner à droite.");
 
         const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
             body: JSON.stringify({
-                model: AGENTS[agentKey].model,
+                model: model,
                 messages: [
-                    { role: "system", content: AGENTS[agentKey].prompt },
-                    { role: "user", content: content.substring(0, 20000) }
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userContent }
                 ],
                 temperature: 0.7
             })
         });
+        
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(`Erreur API: ${errData.message || response.statusText}`);
+        }
+        
         const res = await response.json();
-        if (res.error) throw new Error(res.error.message);
         return res.choices[0].message.content;
     }
 
-    // --- PIPELINE PRODUCTION ---
-    async function runProduction() {
-        const input = document.getElementById("bookInput").value;
-        if(!input) return alert("Le manuscrit est vide !");
-        
-        document.getElementById("launchBtn").disabled = true;
-        let context = input;
-
-        for (let step of Object.keys(AGENTS)) {
-            updateLoader(`GÉNÉRATION : ${step.toUpperCase()}...`);
-            try {
-                const result = await callMistral(step, context);
-                data[step] = result;
-                if(step === 'bible') context = "Basé sur cette Bible :\n" + data.bible;
-                if(step === 'script') context = "Basé sur ce script :\n" + data.script;
-            } catch (err) { alert(err.message); break; }
+    function chunkText(text, maxChars = 15000) {
+        const chunks = [];
+        let i = 0;
+        while (i < text.length) {
+            let chunk = text.substring(i, i + maxChars);
+            let lastPeriod = chunk.lastIndexOf('.');
+            if (lastPeriod > maxChars * 0.5 && i + maxChars < text.length) {
+                chunk = chunk.substring(0, lastPeriod + 1);
+                i += lastPeriod + 1;
+            } else { i += maxChars; }
+            chunks.push(chunk);
         }
-
-        hideLoader();
-        switchView('bible');
-        document.getElementById("launchBtn").disabled = false;
+        return chunks;
     }
 
-    // --- IMPORTATION ---
+    async function runProduction() {
+        const input = document.getElementById("bookInput").value.trim();
+        if(!input) return alert("Veuillez d'abord fournir un manuscrit !");
+        if(!document.getElementById("apiKey").value.trim()) return alert("Clé API requise !");
+        
+        document.getElementById("launchBtn").disabled = true;
+        
+        try {
+            updateLoader("PRÉPARATION DU MANUSCRIT...", "Découpage intelligent en cours");
+            const bookChunks = chunkText(input, 15000);
+            
+            let globalBible = "";
+            for (let i = 0; i < bookChunks.length; i++) {
+                updateLoader(`ANALYSE BIBLE : PARTIE ${i + 1} SUR ${bookChunks.length}...`, "Extraction des arcs dramatiques");
+                const systemPrompt = "Tu es Script-Doctor. Analyse le texte. Identifie thèmes, lieux et personnages. Si une bible existe déjà, METS-LA À JOUR et enrichis-la.";
+                const userPrompt = globalBible === "" 
+                    ? `Début de l'histoire :\n\n${bookChunks[i]}`
+                    : `Bible actuelle :\n${globalBible}\n\nSuite de l'histoire, intègre ces éléments :\n${bookChunks[i]}`;
+                globalBible = await callMistral(systemPrompt, userPrompt, "mistral-large-latest");
+            }
+            data.bible = globalBible;
+
+            let currentContext = globalBible;
+            const steps = Object.keys(AGENTS);
+
+            for (let step of steps) {
+                updateLoader(`GÉNÉRATION : ${step.toUpperCase()}...`, `Agent au travail`);
+                let promptUser = `Voici le matériel de base :\n\n${currentContext}`;
+                if(step === 'budget') {
+                    promptUser = `Voici la Bible :\n${data.bible}\n\nVoici le Scénario :\n${data.script}\n\nÉtablis le budget.`;
+                }
+                const result = await callMistral(AGENTS[step].prompt, promptUser, AGENTS[step].model);
+                data[step] = result;
+                
+                if (step === 'narratif') currentContext = "Basé sur ce séquencier :\n" + data.narratif;
+                if (step === 'script') currentContext = "Basé sur ce scénario :\n" + data.script;
+            }
+
+            hideLoader();
+            switchView('budget'); 
+            
+        } catch (error) {
+            console.error(error);
+            alert(`Arrêt : ${error.message}`);
+            hideLoader();
+        } finally {
+            document.getElementById("launchBtn").disabled = false;
+        }
+    }
+
     const dropZone = document.getElementById("bookInput");
     dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("dragover"); });
     dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
     dropZone.addEventListener("drop", async (e) => {
-        e.preventDefault(); dropZone.classList.remove("dragover");
+        e.preventDefault(); 
+        dropZone.classList.remove("dragover");
         const file = e.dataTransfer.files[0];
+        if (!file) return;
+
         const ext = file.name.split('.').pop().toLowerCase();
-        updateLoader("LECTURE FICHIER...");
+        updateLoader("LECTURE DU FICHIER...", file.name);
+        
         try {
-            if (ext === 'txt') dropZone.value = await file.text();
+            if (ext === 'txt') { dropZone.value = await file.text(); } 
             else if (ext === 'docx') {
                 const res = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
                 dropZone.value = res.value;
             } else if (ext === 'pdf') {
                 const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
-                let text = "";
+                let fullText = "";
                 for (let i = 1; i <= pdf.numPages; i++) {
                     const page = await pdf.getPage(i);
                     const content = await page.getTextContent();
-                    text += content.items.map(s => s.str).join(" ") + "\n";
+                    fullText += content.items.map(item => item.str).join(" ") + "\n";
                 }
-                dropZone.value = text;
-            }
-        } catch (err) { alert("Erreur lors de l'importation."); }
+                dropZone.value = fullText;
+            } else { alert("Format non supporté."); }
+        } catch (err) { alert("Erreur de lecture."); }
         hideLoader();
     });
 
-    // --- UI & RENDER ---
     window.switchView = (id, event) => {
         currentView = id;
         document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
         if(event) event.target.classList.add('active');
-        document.getElementById("main-editor").value = data[id] || "";
-        document.getElementById("view-title").innerText = `ÉDITEUR : ${id.toUpperCase()}`;
+        
+        const editor = document.getElementById("main-editor");
+        editor.value = data[id] || "";
+        document.getElementById("view-title").innerText = `ÉDITEUR : ${id}`;
         updateWordCount();
         
-        if(id === 'image') renderStoryboard(data.image);
-        else {
-            document.getElementById("storyboard-container").style.display = "none";
-            document.getElementById("main-editor").style.display = "block";
-        }
+        const storyboardContainer = document.getElementById("storyboard-container");
+        if(id === 'image') { renderStoryboard(data.image); } 
+        else { storyboardContainer.style.display = "none"; editor.style.display = "block"; }
+    };
+
+    window.updateWordCount = () => {
+        const text = document.getElementById("main-editor").value;
+        const count = text.trim() ? text.trim().split(/\s+/).length : 0;
+        document.getElementById("word-count").innerText = `${count} mots`;
+        data[currentView] = text; 
     };
 
     function renderStoryboard(text) {
@@ -223,54 +288,137 @@
         container.innerHTML = "";
         const regex = /\[PROMPT:(.*?)\]/g;
         let match, found = false;
+        
         while ((match = regex.exec(text)) !== null) {
             found = true;
-            const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(match[1])}?width=1280&height=720&nologo=true`;
+            const prompt = encodeURIComponent(match[1].trim());
+            const url = `https://image.pollinations.ai/prompt/${prompt}?width=1280&height=720&nologo=true&seed=${Math.floor(Math.random()*1000)}`;
             container.innerHTML += `<img src="${url}" class="storyboard-img">`;
         }
-        if (found) {
-            container.style.display = "grid";
-            document.getElementById("main-editor").style.display = "none";
-        }
+        
+        if (found) { container.style.display = "grid"; document.getElementById("main-editor").style.display = "none"; } 
+        else { document.getElementById("main-editor").style.display = "block"; }
     }
 
-    // --- EXPORTS ---
-    window.exportScenarioPDF = () => {
+    // --- NOUVEL EXPORT : PITCH DECK EN PDF STYLISÉ ---
+    window.exportPitchDeckPDF = () => {
+        if (!data.bible) return alert("Veuillez générer le projet d'abord !");
+        
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
-        const script = data.script;
-        if(!script) return alert("Aucun scénario généré.");
+        
+        // Page de garde formelle
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(28);
+        doc.text("DOSSIER DE PRODUCTION", 105, 100, { align: "center" });
+        
+        doc.setFontSize(16);
+        doc.setFont("helvetica", "normal");
+        doc.text("PITCH DECK & BUDGET ESTIMATIF", 105, 120, { align: "center" });
+        
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "italic");
+        doc.text("Préparé par : Niko", 105, 140, { align: "center" });
+        
+        let dateObj = new Date();
+        let month = dateObj.getUTCMonth() + 1;
+        let day = dateObj.getUTCDate();
+        let year = dateObj.getUTCFullYear();
+        doc.text(`Date : ${day}/${month}/${year}`, 105, 150, { align: "center" });
 
+        // Sections du document
+        const sections = [
+            { id: 'bible', title: '1. ANALYSE DRAMATIQUE & BIBLE' },
+            { id: 'budget', title: '2. TOP-SHEET BUDGETAIRE' },
+            { id: 'narratif', title: '3. SÉQUENCIER NARRATIF' },
+            { id: 'technique', title: '4. INTENTIONS DE RÉALISATION' },
+            { id: 'image', title: '5. DIRECTION DE LA PHOTOGRAPHIE' },
+            { id: 'audio', title: '6. DESIGN SONORE' },
+            { id: 'light', title: '7. ÉCLAIRAGE' }
+        ];
+
+        sections.forEach(sec => {
+            if (!data[sec.id]) return;
+            
+            doc.addPage();
+            let y = 30;
+            const margin = 20;
+            
+            // Titre de section
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(16);
+            doc.text(sec.title, margin, y);
+            y += 15;
+            
+            // Contenu
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(11);
+            
+            const lines = doc.splitTextToSize(data[sec.id], 170);
+            lines.forEach(line => {
+                // Ignore les instructions de prompt internes dans l'export final
+                if(line.includes("[PROMPT:")) return; 
+                
+                if (y > 270) { doc.addPage(); y = 30; }
+                doc.text(line, margin, y);
+                y += 6;
+            });
+        });
+
+        doc.save("Pitch_Deck_Niko.pdf");
+    };
+
+    // --- EXPORT SCÉNARIO : RESTE EN COURIER ---
+    window.exportScenarioPDF = () => {
+        if (!data.script) return alert("Le scénario n'est pas encore généré !");
+        
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
         doc.setFont("courier", "normal");
         doc.setFontSize(12);
         
-        const lines = doc.splitTextToSize(script, 170);
+        const lines = data.script.split('\n');
         let y = 20;
+        const margin = 20;
         
+        doc.text("SCÉNARIO - FORMAT INDUSTRIE", 105, 15, { align: "center" });
+        y += 10;
+
         lines.forEach(line => {
+            const text = line.trim();
+            if (text === "") { y += 6; return; }
             if (y > 280) { doc.addPage(); y = 20; }
-            doc.text(line, 20, y);
-            y += 7;
+
+            if (text.startsWith('INT') || text.startsWith('EXT') || text.startsWith('.')) {
+                doc.setFont("courier", "bold"); doc.text(text.toUpperCase(), margin, y);
+            } 
+            else if (text === text.toUpperCase() && text.length > 1 && !text.includes(' - ')) {
+                doc.setFont("courier", "bold"); doc.text(text, 105, y, { align: "center" });
+            } 
+            else if (line.startsWith('    ') || (text.length > 0 && text.length < 50 && line.startsWith(' '))) {
+                doc.setFont("courier", "normal");
+                const splitText = doc.splitTextToSize(text, 90);
+                doc.text(splitText, 60, y);
+                y += (splitText.length - 1) * 6;
+            } 
+            else {
+                doc.setFont("courier", "normal");
+                const splitText = doc.splitTextToSize(text, 170);
+                doc.text(splitText, margin, y);
+                y += (splitText.length - 1) * 6;
+            }
+            y += 6;
         });
-        doc.save("Scenario_Niko_Production.pdf");
+
+        doc.save("Scenario_Pour_Production.pdf");
     };
 
-    window.exportDoc = () => {
-        const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'text/plain'});
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = "Dossier_Complet_Niko.txt";
-        a.click();
-    };
-
-    window.updateWordCount = () => {
-        const text = document.getElementById("main-editor").value;
-        const count = text.trim() ? text.trim().split(/\s+/).length : 0;
-        document.getElementById("word-count").innerText = `${count} mots`;
-        data[currentView] = text; // Autosave
-    };
-
-    function updateLoader(m) { document.getElementById("loader").style.display = "flex"; document.getElementById("loader-text").innerText = m; }
+    function updateLoader(mainText, subText = "") { 
+        document.getElementById("loader").style.display = "flex"; 
+        document.getElementById("loader-text").innerText = mainText; 
+        document.getElementById("loader-sub").innerText = subText;
+    }
     function hideLoader() { document.getElementById("loader").style.display = "none"; }
 
     document.getElementById("launchBtn").onclick = runProduction;
