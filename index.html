@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>AI STUDIO PRO | Master Édition Stable (Niko)</title>
+    <style>
+        :root { --accent: #e74c3c; --bg: #0a0a0a; --panel: #161616; --border: #333; --text: #ddd; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        
+        header { background: #000; padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .title-bar { font-weight: bold; letter-spacing: 2px; color: var(--accent); text-transform: uppercase; }
+        #model-status { font-size: 0.8rem; color: #888; background: #222; padding: 6px 12px; border-radius: 4px; border: 1px solid #444; }
+
+        .main-container { display: grid; grid-template-columns: 280px 1fr 250px; flex-grow: 1; overflow: hidden; }
+        
+        .sidebar { background: var(--panel); border-right: 1px solid var(--border); padding: 15px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+        .sidebar-right { border-left: 1px solid var(--border); border-right: none; }
+        .section-title { color: #777; font-size: 0.7rem; letter-spacing: 1px; margin-top: 15px; margin-bottom: 5px; text-transform: uppercase; font-weight: bold; }
+        
+        .nav-item { padding: 12px; background: #222; border-radius: 6px; cursor: pointer; transition: 0.2s; font-size: 0.85rem; border: 1px solid transparent; text-align: left; width: 100%; color: #ccc; }
+        .nav-item:hover { border-color: var(--accent); color: #fff; }
+        .nav-item.active { background: var(--accent); color: #fff; font-weight: bold; }
+
+        .editor-container { display: flex; flex-direction: column; background: #fff; color: #1a1a1a; position: relative; overflow-y: auto; }
+        .editor-header { background: #f0f0f0; padding: 15px 20px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 5; }
+        #view-title { font-weight: bold; font-family: 'Courier New', monospace; font-size: 1.1rem; color: #333; }
+        
+        #main-editor { flex-grow: 1; padding: 40px; font-family: 'Courier New', monospace; font-size: 1.1rem; border: none; outline: none; resize: none; line-height: 1.6; min-height: 500px; }
+
+        #storyboard-container { display: none; padding: 30px 40px; background: #111; border-top: 3px solid var(--accent); grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .storyboard-img { width: 100%; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); border: 2px solid #333; transition: 0.3s; }
+        .storyboard-img:hover { transform: scale(1.03); border-color: var(--accent); }
+
+        .control-bar { background: var(--panel); padding: 20px 25px; border-top: 1px solid var(--border); display: flex; gap: 15px; align-items: center; }
+        textarea.book-input { flex-grow: 1; height: 60px; background: #222; border: 2px dashed #555; color: white; padding: 12px; border-radius: 8px; font-size: 0.9rem; resize: none; transition: 0.3s; }
+        textarea.book-input:focus { border-color: var(--accent); outline: none; }
+        
+        button { padding: 12px 18px; border-radius: 6px; cursor: pointer; border: none; font-weight: bold; transition: 0.2s; font-size: 0.85rem; }
+        .btn-primary { background: var(--accent); color: white; height: 60px; width: 180px; }
+        .btn-secondary { background: #333; color: white; border: 1px solid #555; }
+        
+        .loading-overlay { position: absolute; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.9); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 100; color: var(--accent); }
+        .version-item { background: #2a2a2a; padding: 10px; font-size: 0.8rem; border-radius: 4px; cursor: pointer; margin-bottom: 5px; border-left: 3px solid transparent; }
+        .version-item:hover { background: #333; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="title-bar">🎬 STUDIO IA : ÉDITION MASTER (MISTRAL-READY)</div>
+    <div id="model-status">Chargement du moteur...</div>
+</header>
+
+<div class="main-container">
+    <div class="sidebar">
+        <div class="section-title">ADAPTATION</div>
+        <button class="nav-item active" onclick="switchView('bible', event)">📖 Analyse & Bible</button>
+        <button class="nav-item" onclick="switchView('narratif', event)">🗺️ Séquencier</button>
+        <button class="nav-item" onclick="switchView('script', event)">📜 Scénario (Fountain)</button>
+        
+        <div class="section-title">TECHNIQUE</div>
+        <button class="nav-item" onclick="switchView('technique', event)">🎥 Shot List</button>
+        <button class="nav-item" onclick="switchView('image', event)">📸 Storyboard Visuel</button>
+        <button class="nav-item" onclick="switchView('audio', event)">🔊 Sound Design</button>
+        <button class="nav-item" onclick="switchView('light', event)">💡 Set-up Lumière</button>
+        
+        <hr style="border: 0.5px solid #333; width: 100%; margin: 10px 0;">
+        <button class="btn-secondary" style="width: 100%;" onclick="exportDoc()">📥 EXPORT TEXTE</button>
+    </div>
+
+    <div class="editor-container">
+        <div id="loader" class="loading-overlay">
+            <h2 id="loader-text">IA EN ACTION...</h2>
+            <p id="loader-sub">L'agent analyse votre texte</p>
+        </div>
+        <div class="editor-header">
+            <span id="view-title">ÉDITEUR : ANALYSE & BIBLE</span>
+            <button class="btn-secondary" onclick="alert('IA re-ready pour cette section.')">🔄 RE-GÉNÉRER</button>
+        </div>
+        <textarea id="main-editor" placeholder="Le contenu pro s'affichera ici..."></textarea>
+        <div id="storyboard-container"></div>
+    </div>
+
+    <div class="sidebar sidebar-right">
+        <div class="section-title">SESSIONS</div>
+        <button class="btn-secondary" style="width: 100%; color: var(--accent);" onclick="saveVersion()">💾 SAUVEGARDER</button>
+        <div id="history-list" style="margin-top:15px;"></div>
+    </div>
+</div>
+
+<div class="control-bar">
+    <textarea class="book-input" id="bookInput" placeholder="Collez votre histoire ou glissez un .txt ici..."></textarea>
+    <button class="btn-primary" id="launchBtn" disabled>🚀 LANCER L'ADAPTATION</button>
+</div>
+
+<script type="module">
+    import * as webllm from "https://esm.run/@mlc-ai/web-llm";
+
+    let engine;
+    let currentView = 'bible';
+    let data = { bible: "", narratif: "", script: "", technique: "", image: "", audio: "", light: "", gear: "" };
+    let versions = [];
+
+    // --- 1. CONFIGURATION DES AGENTS (PROMPTS EXPERTS) ---
+    const AGENTS = {
+        bible: {
+            role: "Tu es Script-Doctor expert. Extrais l'ADN du texte : Thèmes profonds, arcs dramatiques des personnages (Besoin vs Désir) et symbolisme des lieux. Format pro.",
+            temp: 0.4
+        },
+        narratif: {
+            role: "Tu es Scénariste. Transforme la Bible en séquencier cinématographique. Format : SÉQUENCE N° - LIEU - ACTION SYNTHÉTIQUE.",
+            temp: 0.6
+        },
+        script: {
+            role: "Tu es Dialoguiste pro. Écris le scénario au format FOUNTAIN. Noms en MAJUSCULES, actions au présent, phrases courtes. Ne décris que le visible.",
+            temp: 0.8
+        },
+        technique: {
+            role: "Tu es Premier Assistant Réalisateur. Crée une Shot List détaillée (Valeur de plan, mouvement, angle) basée sur le scénario.",
+            temp: 0.5
+        },
+        image: {
+            role: "Tu es Chef Opérateur. Définis l'esthétique (couleurs, lentilles). À LA FIN, génère 3 prompts anglais pour storyboard entre [PROMPT: et ]. Exemple: [PROMPT: Cinematic wide shot, dark forest, 35mm, moody lighting]",
+            temp: 0.7
+        },
+        audio: {
+            role: "Tu es Sound Designer. Liste les ambiances, SFX et textures sonores nécessaires pour l'immersion.",
+            temp: 0.6
+        },
+        light: {
+            role: "Tu es Chef Électricien. Détaille le set-up lumière pour chaque scène clé (Clé, Contre-jour, Remplissage).",
+            temp: 0.5
+        }
+    };
+
+    // --- 2. MOTEUR ET INITIALISATION ---
+    async function init() {
+        try {
+            engine = await webllm.CreateMLCEngine("Llama-3-8B-Instruct-v0.1-q4f32_1-MLC", {
+                initProgressCallback: (r) => { document.getElementById("model-status").innerText = r.text; }
+            });
+            document.getElementById("launchBtn").disabled = false;
+            document.getElementById("model-status").innerText = "MOTEUR PRÊT 🟢";
+        } catch(e) {
+            document.getElementById("model-status").innerText = "ERREUR WEBGPU 🔴";
+        }
+    }
+
+    // --- 3. LOGIQUE DE PRODUCTION ---
+    async function runProduction() {
+        const input = document.getElementById("bookInput").value;
+        if(!input) return alert("Texte vide !");
+        
+        document.getElementById("launchBtn").disabled = true;
+        const steps = ['bible', 'narratif', 'script', 'technique', 'image', 'audio', 'light'];
+        let lastContext = input;
+
+        for (let step of steps) {
+            updateLoader(`L'agent ${step.toUpperCase()} travaille...`);
+            try {
+                const res = await engine.chat.completions.create({
+                    messages: [
+                        { role: "system", content: AGENTS[step].role + " Réfléchis étape par étape." },
+                        { role: "user", content: lastContext }
+                    ],
+                    temperature: AGENTS[step].temp
+                });
+                data[step] = res.choices[0].message.content;
+                // Le contexte s'affine au fur et à mesure (la bible nourrit le script, etc.)
+                if (step === 'bible') lastContext = data.bible;
+                if (step === 'script') lastContext = data.script;
+            } catch (err) {
+                console.error(`Erreur sur ${step}:`, err);
+            }
+        }
+
+        hideLoader();
+        switchView('bible');
+        document.getElementById("launchBtn").disabled = false;
+        saveVersion("Production Auto Terminée");
+    }
+
+    // --- 4. INTERFACE ---
+    window.switchView = (id, event) => {
+        currentView = id;
+        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+        if(event) event.target.classList.add('active');
+        
+        document.getElementById("main-editor").value = data[id];
+        document.getElementById("view-title").innerText = `ÉDITEUR : ${id.toUpperCase()}`;
+
+        if(id === 'image') renderStoryboard(data.image);
+        else document.getElementById("storyboard-container").style.display = "none";
+    };
+
+    function renderStoryboard(text) {
+        const container = document.getElementById("storyboard-container");
+        container.innerHTML = "";
+        const regex = /\[PROMPT:(.*?)\]/g;
+        let match;
+        let found = false;
+
+        while ((match = regex.exec(text)) !== null) {
+            found = true;
+            const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(match[1].trim())}?width=1280&height=720&nologo=true&seed=${Math.random()}`;
+            container.innerHTML += `<img src="${url}" class="storyboard-img" alt="Visual">`;
+        }
+        container.style.display = found ? "grid" : "none";
+    }
+
+    function updateLoader(msg) {
+        document.getElementById("loader").style.display = "flex";
+        document.getElementById("loader-text").innerText = msg;
+    }
+
+    function hideLoader() { document.getElementById("loader").style.display = "none"; }
+
+    window.saveVersion = (name) => {
+        const label = name || `Save ${new Date().toLocaleTimeString()}`;
+        versions.push({ label, data: JSON.parse(JSON.stringify(data)) });
+        const list = document.getElementById("history-list");
+        list.innerHTML = versions.map((v, i) => `<div class="version-item" onclick="loadVersion(${i})">📁 ${v.label}</div>`).join('');
+    };
+
+    window.loadVersion = (i) => {
+        data = JSON.parse(JSON.stringify(versions[i].data));
+        switchView(currentView);
+    };
+
+    window.exportDoc = () => {
+        const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'text/plain'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = "Dossier_Production_Niko.txt";
+        a.click();
+    };
+
+    document.getElementById("launchBtn").onclick = runProduction;
+    init();
+</script>
+</body>
+</html>
