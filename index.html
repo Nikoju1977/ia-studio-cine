@@ -32,7 +32,7 @@
         #view-title { font-weight: bold; font-family: 'Courier New', monospace; font-size: 0.95rem; color: #333; text-transform: uppercase; }
         #word-count { font-size: 0.75rem; color: #666; font-weight: bold; }
         
-        #main-editor { flex-grow: 1; padding: 40px; font-family: 'Courier New', monospace; font-size: 1.05rem; border: none; outline: none; resize: none; line-height: 1.6; min-height: 100%; color: #111; }
+        #main-editor { flex-grow: 1; padding: 40px; font-family: 'Courier New', monospace; font-size: 1.05rem; border: none; outline: none; resize: none; line-height: 1.6; min-height: 100%; color: #111; background: #fff; }
 
         #storyboard-container { display: none; padding: 30px; background: #000; border-top: 4px solid var(--accent); grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; align-content: start; }
         .storyboard-img { width: 100%; border-radius: 6px; box-shadow: 0 10px 25px rgba(0,0,0,0.6); border: 1px solid #333; transition: transform 0.3s; }
@@ -54,10 +54,10 @@
         .btn-pitch { background: #27ae60; color: white; border: none; }
         .btn-pitch:hover { background: #2ecc71; }
 
-        .loading-overlay { position: absolute; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.95); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 100; text-align: center; color: white; }
+        .loading-overlay { position: absolute; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.95); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 999; }
         .spinner { width: 45px; height: 45px; border: 4px solid #333; border-top: 4px solid var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 20px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        #loader-text { font-size: 1.2rem; margin: 0; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
+        #loader-text { font-size: 1.2rem; margin: 0; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: white; }
         #loader-sub { color: #888; font-size: 0.9rem; margin-top: 10px; }
     </style>
 </head>
@@ -109,7 +109,7 @@
 
     <div class="sidebar" style="border-left: 1px solid var(--border); border-right: none;">
         <div class="section-title">CLÉ API MISTRAL</div>
-        <input type="password" id="apiKey" placeholder="Collez votre clé ici..." style="width: 100%; background: #222; border: 1px solid #444; color: white; padding: 10px; border-radius: 4px; box-sizing: border-box; font-size: 0.8rem;">
+        <input type="password" id="apiKey" placeholder="Collez votre clé ici..." style="width: 100%; box-sizing: border-box; background: #222; border: 1px solid #444; color: white; padding: 10px; border-radius: 4px; font-size: 0.8rem;">
         
         <div class="section-title">INFOS PRODUCTION</div>
         <p style="font-size: 0.7rem; color: #999; line-height: 1.5;">
@@ -136,7 +136,7 @@
         image: { prompt: "Tu es Chef Opérateur. À la fin de ton analyse, génère EXACTEMENT 4 PROMPTS visuels en anglais, encadrés par [PROMPT: et ].", model: "mistral-small-latest" },
         audio: { prompt: "Tu es Sound Designer. Liste les ambiances continues, les effets synchrones (SFX) et le soundscape.", model: "mistral-small-latest" },
         light: { prompt: "Tu es Chef Électricien. Détaille le set-up lumière technique.", model: "mistral-small-latest" },
-        budget: { prompt: "Tu es Directeur de Production (Line Producer). Analyse ce projet. Génère un 'Top-Sheet Budget' professionnel incluant : 1. Estimation jours de tournage. 2. Répartition financière. 3. Complexité logistique. 4. Fourchette budgétaire globale en Euros (€). Présente cela clairement.", model: "mistral-large-latest" }
+        budget: { prompt: "Tu es Directeur de Production (Line Producer). Analyse ce projet. Génère un 'Top-Sheet Budget' professionnel incluant : 1. Estimation jours de tournage. 2. Répartition financière par département. 3. Amortissements et provisions.", model: "mistral-large-latest" }
     };
 
     async function callMistral(systemPrompt, userContent, model) {
@@ -268,7 +268,7 @@
         
         const editor = document.getElementById("main-editor");
         editor.value = data[id] || "";
-        document.getElementById("view-title").innerText = `ÉDITEUR : ${id}`;
+        document.getElementById("view-title").innerText = `ÉDITEUR : ${id.toUpperCase()}`;
         updateWordCount();
         
         const storyboardContainer = document.getElementById("storyboard-container");
@@ -300,7 +300,7 @@
         else { document.getElementById("main-editor").style.display = "block"; }
     }
 
-    // --- NOUVEL EXPORT : PITCH DECK EN PDF STYLISÉ ---
+    // --- EXPORT : PITCH DECK EN PDF STYLISÉ ---
     window.exportPitchDeckPDF = () => {
         if (!data.bible) return alert("Veuillez générer le projet d'abord !");
         
@@ -368,7 +368,7 @@
         doc.save("Pitch_Deck_Niko.pdf");
     };
 
-    // --- EXPORT SCÉNARIO : RESTE EN COURIER ---
+    // --- EXPORT SCÉNARIO : EN COURIER ---
     window.exportScenarioPDF = () => {
         if (!data.script) return alert("Le scénario n'est pas encore généré !");
         
