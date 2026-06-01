@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>AI STUDIO PRO | Master Edition (Niko)</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
@@ -11,7 +11,8 @@
     
     <style>
         :root { --accent: #e74c3c; --bg: #0a0a0a; --panel: #161616; --border: #333; --text: #ddd; --editor-bg: #ffffff; }
-        body { font-family: 'Orbitron', -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+        body {
+  padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px); font-family: 'Orbitron', -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
         
         header { background: #000; padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; z-index: 10; }
         .title-bar { font-weight: 800; letter-spacing: 2px; color: var(--accent); text-transform: uppercase; font-size: 0.85rem; }
@@ -59,7 +60,12 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         #loader-text { font-size: 1.2rem; margin: 0; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: white; }
         #loader-sub { color: #888; font-size: 0.9rem; margin-top: 10px; }
-    </style>
+    
+/* ── Skeleton Loader ─────────────────────────── */
+.skeleton{background:linear-gradient(90deg,rgba(0,255,157,.07) 25%,rgba(0,255,157,.15) 50%,rgba(0,255,157,.07) 75%);background-size:200% 100%;animation:skel-wave 1.4s infinite;border-radius:6px;min-height:1em}
+@keyframes skel-wave{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+</style>
   <meta name="description" content="IA Studio Ciné — Interface IA pour la création cinématographique. Scripts, storyboards, analyse rushes.">
   <meta name="author" content="Nicolas Julienne — Studio Niko Design">
   <meta name="theme-color" content="#ff0080">
@@ -71,7 +77,10 @@
   <meta name="twitter:title" content="IA Studio Ciné | Studio Niko Design">
   <meta name="twitter:description" content="Production vidéo IA — génération scripts, storyboards, analyse rushes, interface réalisateur">
 </head>
-<body>
+<body role="application" aria-label="IA Studio Ciné — Production vidéo IA">
+<main id="app" tabindex="-1">
+<h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">IA Studio Ciné</h1>
+
 
 <header>
     <div class="title-bar">🎬 STUDIO IA : MASTER PRODUCTION - DIR. NIKO</div>
@@ -432,6 +441,25 @@
     function hideLoader() { document.getElementById("loader").style.display = "none"; }
 
     document.getElementById("launchBtn").onclick = runProduction;
+</script>
+
+</main>
+
+<script>
+if('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    const swCode = `
+const CACHE='niko-v1';
+const ASSETS=['./','/index.html'];
+self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS))));
+self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));
+self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k))))));
+    `;
+    const blob = new Blob([swCode],{type:'text/javascript'});
+    const swURL = URL.createObjectURL(blob);
+    navigator.serviceWorker.register(swURL).catch(()=>{});
+  });
+}
 </script>
 </body>
 </html>
