@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>IA Studio Ciné → WanGP Bridge</title>
+  <style>
+    :root { color-scheme: dark; --bg:#08090c; --panel:#13161d; --text:#f5f7fb; --muted:#9aa3b5; --accent:#e74c3c; --ok:#39d98a; }
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,sans-serif;height:100dvh;display:grid;grid-template-rows:auto 1fr}
+    header{display:flex;gap:14px;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #272b35;background:#0d0f14;flex-wrap:wrap}
+    .brand strong{display:block;font-size:17px}.brand span{font-size:12px;color:var(--muted)}
+    .actions{display:flex;gap:8px;flex-wrap:wrap} button{border:1px solid #343946;background:#1b1f29;color:#fff;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer}button.primary{background:var(--accent);border-color:var(--accent)}button:hover{filter:brightness(1.08)}
+    main{min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 340px}.stage{min-height:0;padding:10px}.stage iframe{width:100%;height:100%;border:1px solid #2b303b;border-radius:14px;background:#000}.side{border-left:1px solid #272b35;padding:16px;overflow:auto;background:var(--panel)}
+    .card{border:1px solid #2d3240;border-radius:12px;padding:14px;margin-bottom:12px;background:#10131a}.card h2{font-size:14px;margin:0 0 8px}.card p{margin:6px 0;color:var(--muted);font-size:13px;line-height:1.45}
+    #status{color:var(--ok);font-size:13px;white-space:pre-wrap} pre{white-space:pre-wrap;word-break:break-word;max-height:42vh;overflow:auto;background:#080a0f;border:1px solid #252a35;border-radius:8px;padding:10px;font-size:11px;color:#cbd3e3}
+    @media(max-width:900px){main{grid-template-columns:1fr;grid-template-rows:60vh auto}.side{border-left:0;border-top:1px solid #272b35}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="brand"><strong>🎬 IA Studio Ciné → WanGP</strong><span>Pont de production Niko Video Studio</span></div>
+  <div class="actions">
+    <button id="scan">Analyser le projet</button>
+    <button id="copy">Copier JSON</button>
+    <button class="primary" id="download">Exporter pour WanGP</button>
+  </div>
+</header>
+<main>
+  <section class="stage"><iframe id="studio" src="index.html" title="IA Studio Ciné"></iframe></section>
+  <aside class="side">
+    <div class="card"><h2>Workflow</h2><p>Travaille normalement dans IA Studio Ciné. Quand le projet est prêt, clique sur <b>Exporter pour WanGP</b>. Le fichier obtenu est directement importable dans Niko Video Studio V2.</p></div>
+    <div class="card"><h2>État</h2><div id="status">Chargement d’IA Studio Ciné…</div></div>
+    <div class="card"><h2>Aperçu export</h2><pre id="preview">Aucun projet analysé.</pre></div>
+  </aside>
+</main>
+<script>
+const iframe = document.getElementById('studio');
+const statusEl = document.getElementById('status');
+const previewEl = document.getElementById('preview');
+let lastProject = null;
+
+const SECTION_IDS = ['bible','narratif','script','technique','image','audio','light','budget'];
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+iframe.addEventListener('load', () => {
+  statusEl.textContent = 'IA Studio Ciné chargé. Génère ou ouvre ton projet puis exporte-le.';
+});
+
+async function readSection(id) {
+  const win = iframe.contentWindow;
+  const doc = iframe.contentDocument;
+  if (!win || !doc) throw new Error('Impossible d’accéder à IA Studio Ciné. Ouvre cette page depuis le même serveur / GitHub Pages.');
+  if (typeof win.switchView !== 'function') throw new Error('IA Studio Ciné n’est pas encore prêt.');
+  win.switchView(id);
+  await sleep(25);
+  return (doc.getElementById('main-editor')?.value || '').trim();
+}
+
+function extractVisualPrompts(text) {
+  const shots = [];
+  const regex = /\[PROMPT:\s*([\s\S]*?)\]/gi;
+  let match;
+  while ((match = regex.exec(text || '')) !== null) {
+    const prompt = match[1].trim();
+    if (prompt) shots.push({ id: shots.length + 1, prompt, duration: 4, notes: '' });
+  }
+  return shots;
+}
+
+function extractShotList(text) {
+  return (text || '').split(/\n+/).map(v => v.trim()).filter(Boolean).slice(0, 200);
+}
+
+async function buildProject() {
+  statusEl.textContent = 'Lecture des départements de production…';
+  const sections = {};
+  for (const id of SECTION_IDS) sections[id] = await readSection(id);
+  const shots = extractVisualPrompts(sections.image);
+  const project = {
+    schema: 'niko-video-project/v1',
+    source: 'ia-studio-cine',
+    exported_at: new Date().toISOString(),
+    title: 'Projet IA Studio Ciné',
+    continuity: {
+      bible: sections.bible,
+      visual_direction: sections.image,
+      technical_direction: sections.technique,
+      sound_direction: sections.audio,
+      lighting_direction: sections.light
+    },
+    shots,
+    shot_list: extractShotList(sections.technique),
+    sections
+  };
+  lastProject = project;
+  previewEl.textContent = JSON.stringify(project, null, 2);
+  statusEl.textContent = `${shots.length} plan(s) visuel(s) détecté(s). Projet prêt pour Niko Video Studio V2.`;
+  return project;
+}
+
+async function exportProject() {
+  const project = await buildProject();
+  const blob = new Blob([JSON.stringify(project, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `niko-video-project-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+document.getElementById('scan').onclick = () => buildProject().catch(e => statusEl.textContent = `Erreur : ${e.message}`);
+document.getElementById('download').onclick = () => exportProject().catch(e => statusEl.textContent = `Erreur : ${e.message}`);
+document.getElementById('copy').onclick = async () => {
+  try {
+    const project = lastProject || await buildProject();
+    await navigator.clipboard.writeText(JSON.stringify(project, null, 2));
+    statusEl.textContent = 'JSON copié dans le presse-papiers.';
+  } catch (e) { statusEl.textContent = `Erreur : ${e.message}`; }
+};
+</script>
+</body>
+</html>
