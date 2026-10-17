@@ -13,6 +13,37 @@ jobs:
       - uses: actions/checkout@v4
       - name: Extraire le code du studio
         run: tar -xJf orbit_android_src.tar.xz
+      - name: Protéger le pont natif contre les iframes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('app/src/main')
+          p=root/'java/fr/orbit/studio/MainActivity.java'
+          s=p.read_text()
+          s=s.replace('    private WebView web;\n','    private WebView web;\n    private final String bridgeToken = UUID.randomUUID().toString();\n')
+          s=s.replace('                    InputStream stream = getAssets().open(path);\n','''                    InputStream stream = getAssets().open(path);
+                              if (path.equals("index.html")) {
+                                  String html;
+                                  try (InputStream origin = stream) { html = readLimit(origin, 1024*1024); }
+                                  html = html.replace("</head>", "<script>window.__orbitNativeToken='"+bridgeToken+"';</script></head>");
+                                  stream = new java.io.ByteArrayInputStream(html.getBytes(StandardCharsets.UTF_8));
+                              }
+          ''')
+          s=s.replace('        @JavascriptInterface public void request(String id, String method, String path, String payload) {\n', '        @JavascriptInterface public void request(String id, String method, String path, String payload, String token) {\n            if (!bridgeToken.equals(token)) return;\n')
+          s=s.replace('        @JavascriptInterface public void configure() { runOnUiThread(() -> showSettings()); }', '        @JavascriptInterface public void configure(String token) { if (bridgeToken.equals(token)) runOnUiThread(() -> showSettings()); }')
+          s=s.replace('        @JavascriptInterface public void saveText(String content, String filename, String mime) {\n', '        @JavascriptInterface public void saveText(String content, String filename, String mime, String token) {\n            if (!bridgeToken.equals(token)) return;\n')
+          s=s.replace('        @JavascriptInterface public void downloadMedia(String uri, String label) {\n', '        @JavascriptInterface public void downloadMedia(String uri, String label, String token) {\n            if (!bridgeToken.equals(token)) return;\n')
+          p.write_text(s)
+          p=root/'assets/native.js'
+          s=p.read_text().replace('window.OrbitNative.request(id, method, url, String(payload))','window.OrbitNative.request(id, method, url, String(payload), window.__orbitNativeToken)')
+          s=s.replace('window.OrbitNative.configure()', 'window.OrbitNative.configure(window.__orbitNativeToken)')
+          p.write_text(s)
+          p=root/'assets/app.js'
+          s=p.read_text().replace('window.OrbitNative.saveText(String(text),String(filename),String(type))','window.OrbitNative.saveText(String(text),String(filename),String(type),window.__orbitNativeToken)')
+          s=s.replace("window.OrbitNative.downloadMedia(url,'orbit-'+kind)","window.OrbitNative.downloadMedia(url,'orbit-'+kind,window.__orbitNativeToken)")
+          p.write_text(s)
+          assert 'bridgeToken.equals(token)' in (root/'java/fr/orbit/studio/MainActivity.java').read_text()
+          PY
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -20,14 +51,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
-      - name: Vérifier Android SDK
-        run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          ls "$ANDROID_HOME/platforms" || true
-          ls "$ANDROID_HOME/build-tools" || true
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
-      - name: Compiler et signer APK (debug)
+      - name: Compiler et signer APK Android
         run: gradle :app:assembleDebug --no-daemon
+      - name: Vérifier signature de l'APK
+        run: |
+          BUILDTOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d -name '[0-9]*' | sort -V | tail -1)
+          "$BUILDTOOLS/apksigner" verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk
       - uses: actions/upload-artifact@v4
         with:
           name: ORBIT-STUDIO-Android-APK
