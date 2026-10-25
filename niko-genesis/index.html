@@ -58,12 +58,72 @@ if(step===2)v+='<section class="panel">'+f({...p,id:"project"},"title","Titre")+
 if(step===3)v+='<section class="panel"><h2>Casting et continuité</h2><div class="actions">'+action("casting","Créer les personnages avec Ollama","", "primary")+action("addchar","+ Personnage")+'</div><div class="grid">'+p.characters.map(c=>'<article class="card">'+media(c)+f(c,"name","Nom")+f(c,"role","Rôle")+f(c,"description","Description physique",true)+f(c,"outfit","Costume",true)+'<div class="actions">'+action("image","Générer portrait",c.id)+action("delchar","Supprimer",c.id)+'</div></article>').join("")+'</div></section>';
 if(step===4)v+='<section class="panel"><h2>Écriture des scènes</h2><div class="actions">'+action("scenes","Générer 5 scènes", "", "primary")+action("addscene","+ Scène")+'</div><div class="grid">'+p.scenes.map(s=>'<article class="card">'+media(s)+f(s,"title","Titre")+f(s,"summary","Résumé",true)+f(s,"decor","Décor",true)+f(s,"mood","Lumière / ambiance")+f(s,"dialogue","Dialogues",true)+'<div class="actions">'+action("image","Illustrer le décor",s.id)+action("delscene","Supprimer",s.id)+'</div></article>').join("")+'</div></section>';
 if(step===5)v+='<section class="panel"><h2>Découpage technique</h2><div class="actions">'+action("shots","Découper les scènes avec Ollama","", "primary")+'</div>'+p.scenes.map(s=>'<h3>'+H(s.title)+'</h3><div class="actions">'+action("addshot","+ Plan",s.id)+'</div><div class="grid">'+(s.shots||[]).map(h=>'<article class="card">'+media(h)+f(h,"size","Cadrage")+f(h,"camera","Caméra")+f(h,"action","Action",true)+f(h,"cast","Personnages")+f(h,"line","Dialogue",true)+'<div class="actions">'+action("image","Générer first frame",h.id)+action("delshot","Supprimer",h.id)+'</div></article>').join("")+'</div>').join("")+'</section>';
-if(step===6)v+='<section class="panel"><h2>Génération vidéo et exports</h2><p class="sm">Chaque plan doit posséder une image de départ. Les vidéos sont obtenues via un workflow ComfyUI image-to-video compatible. Le montage MP4 final n’est pas encore intégré.</p><div class="actions">'+action("prompts","Exporter prompts WAN / Flow","", "primary")+action("csv","Exporter liste des plans")+action("export","Exporter projet JSON")+'</div><div class="grid">'+shotPairs().map(({s,h},i)=>'<article class="card"><h3>Plan '+(i+1)+' · '+H(s.title)+'</h3>'+media(h)+'<p>'+H(h.action)+'</p>'+((h.videoId)?'<div class="sm">Vidéo sauvegardée · '+H(h.videoId)+'</div>':'')+'<div class="actions">'+action("video","Créer vidéo",h.id)+action("download","Télécharger vidéo",h.id)+'</div><details><summary>Prompts</summary><pre>'+H(imagePrompt(s,h))+'\n\n'+H(videoPrompt(s,h))+'</pre></details></article>').join("")+'</div></section>';
+if(step===6)v+='<section class="panel"><h2>Génération vidéo et exports</h2><p class="sm">Chaque plan doit posséder une image de départ. Les vidéos sont obtenues via un workflow ComfyUI image-to-video compatible. Le serveur FFmpeg assemble les rushes en un MP4 H.264/AAC avec les sous-titres des répliques.</p><div class="actions">'+action("prompts","Exporter prompts WAN / Flow","", "primary")+action("csv","Exporter liste des plans")+action("export","Exporter projet JSON")+'</div><hr><h3>Montage du film complet</h3><p class="sm">Les rushes vidéo sont envoyés au serveur dans l’ordre des plans. FFmpeg conserve leurs pistes audio et ajoute une piste de sous-titres FR. Limite : 40 plans, 120 Mo par plan.</p><p class="sm">Statut : '+H(p.renderStatus?.stage||"Aucun rendu lancé")+' · '+H(p.renderStatus?.progress??0)+' %</p><div class="actions">'+action("renderStart","Assembler le film MP4","", "primary")+action("renderStatus","Vérifier le rendu")+action("renderDownload","Télécharger MP4")+action("renderSrt","Sous-titres SRT")+'</div><hr><div class="grid">'+shotPairs().map(({s,h},i)=>'<article class="card"><h3>Plan '+(i+1)+' · '+H(s.title)+'</h3>'+media(h)+'<p>'+H(h.action)+'</p>'+((h.videoId)?'<div class="sm">Vidéo sauvegardée · '+H(h.videoId)+'</div>':'')+'<div class="actions">'+action("video","Créer vidéo",h.id)+action("download","Télécharger vidéo",h.id)+'</div><details><summary>Prompts</summary><pre>'+H(imagePrompt(s,h))+'\n\n'+H(videoPrompt(s,h))+'</pre></details></article>').join("")+'</div></section>';
 v+='<div class="panel"><div class="actions">'+action("new","Nouveau film")+action("export","Exporter JSON")+action("import","Importer JSON")+'<input id="jsonFile" type="file" accept=".json,application/json" hidden></div><small class="sm">Sauvegarde sur cet appareil. Exporter régulièrement sur iOS, le navigateur pouvant supprimer des données.</small></div>';
 Q("#app").innerHTML=v;}
 function allItems(){return [...p.characters,...p.scenes,...shotPairs().map(x=>x.h)]}
 function find(id){return id==="project"?p:allItems().find(x=>x.id===id)}
 async function api(path,body,blob=false){const headers=secret?{"Authorization":"Bearer "+secret}:{};if(body)headers["Content-Type"]="application/json";const r=await fetch(path,{method:body?"POST":"GET",headers,body:body?JSON.stringify(body):undefined});if(!r.ok){let e;try{e=await r.json()}catch(e){}throw Error((e&&e.error)||"Serveur inaccessible HTTP "+r.status)}return blob?r.blob():r.json()}
+
+function renderSignature(){return p.ratio+"|"+shotPairs().map(({h})=>h.id+":"+h.videoId).join("|")}
+async function rawClipUpload(job,index,blob){
+const headers={"Content-Type":["video/mp4","video/webm","video/quicktime"].includes(blob.type)?blob.type:"application/octet-stream"};
+if(secret)headers.Authorization="Bearer "+secret;
+const r=await fetch("./api/render/upload?id="+encodeURIComponent(job)+"&index="+index,{method:"POST",headers,body:blob});
+if(!r.ok){let d={};try{d=await r.json()}catch(e){}throw Error(d.error||"Échec du transfert rush "+(index+1))}
+return r.json();
+}
+async function updateRenderStatus(){
+if(!p.render?.id)throw Error("Aucun montage lancé");
+const st=await api("./api/render/status?id="+encodeURIComponent(p.render.id));
+p.renderStatus=st;persist();render();return st;
+}
+async function renderFilm(){
+const a=shotPairs();
+if(!db)throw Error("IndexedDB requis pour récupérer les rushes");
+if(!a.length||a.length>40)throw Error("Le montage accepte entre 1 et 40 plans");
+if(a.some(({h})=>!h.videoId))throw Error("Chaque plan doit avoir une vidéo générée");
+const signature=renderSignature();
+let state;
+if(p.render?.signature===signature&&p.render.id){
+try{state=await api("./api/render/status?id="+encodeURIComponent(p.render.id))}catch(e){notice("Ancien rendu indisponible : nouveau travail");state=null}
+}
+if(!state){
+state=await api("./api/render/new",{title:p.title,ratio:p.ratio,clips:a.map(({s,h})=>({label:s.title,line:h.line}))});
+p.render={id:state.id,signature};persist();
+}
+p.renderStatus=state;persist();
+if(state.state==="done"){notice("Film déjà prêt");render();return}
+if(state.state==="running"){notice("Montage en cours sur le serveur");render();return}
+if(state.state==="error"||state.state==="interrupted"){
+state=await api("./api/render/start",{id:p.render.id});p.renderStatus=state;persist();render();return
+}
+const uploaded=new Set(state.uploaded||[]);
+for(let i=0;i<a.length;i++){
+if(uploaded.has(i))continue;
+const item=await tx("media","readonly",store=>store.get(a[i].h.videoId));
+if(!item?.blob)throw Error("Rush local manquant pour le plan "+(i+1)+". Télécharge et réimporte les médias nécessaires.");
+notice("Envoi du rush "+(i+1)+" / "+a.length);
+state=await rawClipUpload(p.render.id,i,item.blob);
+p.renderStatus=state;persist();
+}
+state=await api("./api/render/start",{id:p.render.id});
+p.renderStatus=state;persist();render();
+notice("Montage lancé sur le serveur : tu peux fermer cet onglet.");
+}
+async function fetchRendered(kind){
+if(!p.render?.id)throw Error("Aucun rendu à télécharger");
+const st=await updateRenderStatus();
+if(st.state!=="done")throw Error("Montage pas encore terminé ("+st.state+")");
+const qs="?id="+encodeURIComponent(p.render.id);
+const path=kind==="srt"?"subtitles":"download";
+const headers=secret?{Authorization:"Bearer "+secret}:{};
+const r=await fetch("./api/render/"+path+qs,{headers});
+if(!r.ok)throw Error("Impossible de télécharger le montage");
+const payload=await r.blob();
+download(filename()+(kind==="srt"?".srt":".mp4"),payload,kind==="srt"?"text/plain":"video/mp4");
+}
+
 async function ai(system,prompt){const r=await api("./api/ai",{system,prompt});return r.result}
 function setBusy(on,label){busy=on;render();if(label)notice(label)}
 async function makeAI(kind){const system="Tu es un réalisateur et scénariste professionnel. Réponds seulement en objet JSON valide, pas en Markdown.";
@@ -94,10 +154,15 @@ if(action==="export"){download(filename()+".json",JSON.stringify(p,null,2),"appl
 if(action==="prompts"){download(filename()+"-prompts.txt",promptPack());return}
 if(action==="csv"){const rows=["Scene;Cadrage;Camera;Action;Dialogue"].concat(shotPairs().map(({s,h})=>[s.title,h.size,h.camera,h.action,h.line].map(x=>'"'+String(x||"").replace(/"/g,'""')+'"').join(";")));download(filename()+"-plans.csv","\ufeff"+rows.join("\r\n"),"text/csv");return}
 if(action==="import"){Q("#jsonFile").click();return}
+if(action==="renderStatus"){await updateRenderStatus();return}
+if(action==="renderDownload"){await fetchRendered("mp4");return}
+if(action==="renderSrt"){await fetchRendered("srt");return}
+if(action==="renderStart"){setBusy(true,"Préparation du film");try{await renderFilm()}finally{setBusy(false)}return}
 if(action==="download"){if(!target?.videoId||!db)throw Error("Vidéo absente");const a=await tx("media","readonly",s=>s.get(target.videoId));if(!a?.blob)throw Error("Fichier introuvable");download(filename()+"-"+id.slice(0,8)+".mp4",a.blob);return}
 if(["syn","casting","scenes","shots","image","video"].includes(action)){setBusy(true,"Traitement en cours · conserve cet onglet ouvert");try{if(["image","video"].includes(action))await mediaJob(action,target);else await makeAI(action);notice("Opération terminée")}finally{setBusy(false)}}
 }
 document.addEventListener("click",e=>{const tab=e.target.closest("[data-step]");if(tab){step=+tab.dataset.step;render();return}const el=e.target.closest("[data-act]");if(!el||busy)return;dispatch(el).catch(e=>notice("Erreur : "+e.message))});
 document.addEventListener("change",e=>{const el=e.target;if(el.dataset.field){const x=find(el.dataset.id);if(x){x[el.dataset.field]=el.value;persist()}}if(el.id==="jsonFile"&&el.files?.[0]){el.files[0].text().then(raw=>{const a=JSON.parse(raw);if(!a||!Array.isArray(a.scenes)||!Array.isArray(a.characters))throw Error("Format invalide");if(!confirm("Importer ce film à la place du projet affiché ?"))return;p={...blank(),...a,id:uid()};persist();render();notice("Projet importé")}).catch(e=>notice("Import : "+e.message))}});
+setInterval(()=>{if(step!==6||busy||!p.render?.id||p.renderStatus?.state!=="running")return;updateRenderStatus().catch(()=>{})},12000);
 init();
 </script></body></html>
