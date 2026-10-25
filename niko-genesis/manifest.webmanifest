@@ -1,0 +1,19 @@
+{
+  "name": "NIKO STUDIO · CINÉ GENESIS",
+  "short_name": "NIKO STUDIO",
+  "description": "Studio de cinéma IA open source pour Android et iOS",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0a101b",
+  "theme_color": "#111827",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    }
+  ]
+}

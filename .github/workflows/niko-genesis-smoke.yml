@@ -1,0 +1,53 @@
+name: NIKO GENESIS smoke tests
+on:
+  push:
+    paths:
+      - 'niko-genesis/**'
+      - '.github/workflows/niko-genesis-smoke.yml'
+  pull_request:
+    paths:
+      - 'niko-genesis/**'
+      - '.github/workflows/niko-genesis-smoke.yml'
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate Python, PWA and embedded JavaScript
+        run: |
+          python -m py_compile niko-genesis/server.py
+          python -m json.tool niko-genesis/manifest.webmanifest > /dev/null
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          html=Path("niko-genesis/index.html").read_text()
+          match=re.search(r"<script>([\s\S]*?)</script>", html)
+          assert match, "Embedded script missing"
+          Path("/tmp/niko-genesis-app.js").write_text(match.group(1))
+          for required in ("indexedDB", "Ollama", "ComfyUI", "shotPairs", "manifest.webmanifest"):
+              assert required in html, required
+          PY
+          node --check /tmp/niko-genesis-app.js
+          node --check niko-genesis/sw.js
+      - name: HTTP smoke test
+        run: |
+          PORT=8976 python niko-genesis/server.py >/tmp/niko-server.log 2>&1 &
+          pid=$!
+          trap 'kill $pid 2>/dev/null || true' EXIT
+          python - <<'PY'
+          import time,urllib.request
+          for attempt in range(30):
+              try:
+                  with urllib.request.urlopen("http://127.0.0.1:8976/niko-genesis/",timeout=2) as r:
+                      assert b"NIKO STUDIO" in r.read()
+                  break
+              except Exception:
+                  if attempt==29: raise
+                  time.sleep(.3)
+          PY

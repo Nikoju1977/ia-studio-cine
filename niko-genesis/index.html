@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827"><meta name="description" content="NIKO STUDIO — création de films, scénarios, personnages, plans et vidéos par IA ouverte.">
+<link rel="manifest" href="./manifest.webmanifest"><title>NIKO STUDIO · CINÉ GENESIS</title>
+<style>
+:root{color-scheme:dark;--bg:#0a101b;--pane:#172337;--line:#354259;--txt:#f6f7fa;--mut:#b0bfd3;--gold:#e9bc67;--good:#58ce9a}
+*{box-sizing:border-box}body{background:radial-gradient(ellipse at 15% 0%,#24314a,transparent 40%),var(--bg);margin:0;color:var(--txt);font:16px/1.48 system-ui,sans-serif;padding-bottom:env(safe-area-inset-bottom)}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:17px max(15px,env(safe-area-inset-left));border-bottom:1px solid var(--line);position:sticky;top:0;background:#0b101cef;z-index:3;backdrop-filter:blur(12px)}
+.brand{font-size:19px;font-weight:900;letter-spacing:.13em}.brand span{color:var(--gold)}.sm{font-size:12px;color:var(--mut)}
+main{max-width:1080px;padding:18px;margin:auto}nav{display:flex;gap:5px;overflow-x:auto;padding:14px 0;scrollbar-width:thin}
+button,a.btn{border:1px solid var(--line);color:var(--txt);background:#1c293d;border-radius:9px;min-height:42px;padding:10px 12px;font:600 14px system-ui;cursor:pointer;text-decoration:none}
+button:hover,a.btn:hover{border-color:var(--gold)}button:disabled{opacity:.45}button.active,.primary{background:var(--gold);border-color:var(--gold);color:#101929}button.active{min-width:max-content}
+nav button{white-space:nowrap;min-width:max-content}.hero{padding:18px 20px 24px;border-radius:16px;background:linear-gradient(125deg,#172b44,#101725);border:1px solid var(--line);margin-bottom:16px}
+.eyebrow{font:600 11px ui-monospace,monospace;letter-spacing:.15em;color:var(--gold);text-transform:uppercase}h1{font-size:clamp(24px,4vw,38px);line-height:1.15;letter-spacing:.01em;margin:8px 0}h2{font-size:19px;margin:0 0 12px}h3{font-size:16px;margin:8px 0}
+.panel{padding:18px;background:#111d2e;border:1px solid var(--line);border-radius:14px;margin:12px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,265px),1fr));gap:12px}
+.card{background:var(--pane);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}
+label{display:block;font-size:13px;color:var(--mut);margin:10px 0 4px}
+input,textarea,select{background:#09131f;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:11px;width:100%;font:15px/1.5 system-ui;min-height:43px}
+textarea{resize:vertical;min-height:86px}textarea:focus,input:focus{outline:2px solid var(--gold);outline-offset:1px}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;align-items:center}
+.notice{padding:12px 14px;background:#243246;border-left:3px solid var(--gold);border-radius:7px;color:var(--mut);margin:12px 0}
+.preview{width:100%;aspect-ratio:16/9;object-fit:contain;border-radius:8px;background:#070b13;margin:9px 0}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;color:#bbd1e9;font-size:12px;max-height:250px;overflow:auto}
+a{color:#f1c875}hr{border:0;border-top:1px solid var(--line);margin:15px 0}
+footer{text-align:center;font-size:12px;color:var(--mut);padding:25px}
+#msg{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));background:#25364d;border:1px solid var(--gold);border-radius:10px;padding:13px;max-width:360px;display:none;z-index:9;box-shadow:0 6px 25px #0008}
+@media(max-width:600px){header{align-items:flex-start}.brand{font-size:16px}main{padding:10px}.panel{padding:13px}button,a.btn{min-height:44px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation:none!important}}
+</style></head>
+<body><header><div><div class="brand">NIKO <span>STUDIO</span></div><div class="sm">CINÉ GENESIS · ÉDITION OPEN</div></div><a class="btn" href="../index.html">Retour Studio Niko</a></header>
+<main><nav id="steps" aria-label="Étapes de réalisation"></nav><section id="app" aria-live="polite"></section></main>
+<div id="msg" role="status"></div><footer>Création cinématographique · Sauvegarde locale · Ollama / ComfyUI · Android / iOS</footer>
+<script>
+"use strict";
+const Q=s=>document.querySelector(s), H=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid=()=>crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random();
+const names=["Connexion","Genre","Synopsis","Personnages","Scènes","Plans","Vidéos"];
+const genres=["Cinéma d’auteur","Thriller","Documentaire","Science-fiction","Animation","Film noir","Clip","Expérimental"];
+const blank=()=>({id:uid(),title:"Mon film",genre:genres[0],ratio:"16:9",style:"natural cinematic lighting, film grain",idea:"",synopsis:"",characters:[],scenes:[],updated:Date.now()});
+let p=blank(),step=1,busy=false,db=null,secret=sessionStorage.getItem("niko_token")||"";
+const obj={characters:()=>p.characters,scenes:()=>p.scenes,shots:()=>p.scenes.flatMap(s=>s.shots||[])};
+function notice(t){const el=Q("#msg");el.textContent=t;el.style.display="block";setTimeout(()=>el.style.display="none",5500)}
+function save(){p.updated=Date.now();if(db){const tx=db.transaction("projects","readwrite");tx.objectStore("projects").put(JSON.parse(JSON.stringify(p)));}else{try{localStorage.setItem("niko_genesis_project",JSON.stringify(p))}catch(e){notice("Espace insuffisant : exporte ton projet.")}}}
+function tx(store,mode,fn){return new Promise((resolve,reject)=>{const a=db.transaction(store,mode);const r=fn(a.objectStore(store));r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
+async function init(){try{db=await new Promise((res,rej)=>{const r=indexedDB.open("niko_genesis_v2",1);r.onupgradeneeded=()=>{r.result.createObjectStore("projects",{keyPath:"id"});r.result.createObjectStore("media",{keyPath:"id"})};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});const last=localStorage.getItem("niko_genesis_last");const data=last&&await tx("projects","readonly",s=>s.get(last));if(data)p=data;}catch(e){db=null;try{p=JSON.parse(localStorage.getItem("niko_genesis_project"))||p}catch(e){}}p.characters=Array.isArray(p.characters)?p.characters:[];p.scenes=Array.isArray(p.scenes)?p.scenes:[];p.scenes.forEach(s=>s.shots=Array.isArray(s.shots)?s.shots:[]);render();if("serviceWorker"in navigator&&location.protocol==="https:")navigator.serviceWorker.register("./sw.js").catch(()=>{})}
+async function persist(){save();try{localStorage.setItem("niko_genesis_last",p.id)}catch(e){}}
+const f=(o,k,label,area=false)=>'<label>'+H(label)+(area?'<textarea data-id="'+H(o.id)+'" data-field="'+k+'">'+H(o[k])+'</textarea>':'<input data-id="'+H(o.id)+'" data-field="'+k+'" value="'+H(o[k])+'">')+'</label>';
+const action=(a,label,id="",cl="")=>'<button '+(busy?'disabled ':'')+'data-act="'+a+'" data-id="'+H(id)+'" class="'+cl+'">'+H(label)+'</button>';
+function shotPairs(){return p.scenes.flatMap(s=>(s.shots||[]).map(h=>({s,h})))}
+function imagePrompt(s,h){return ["Cinematic first frame",p.style,"Genre: "+p.genre,"Setting: "+s.decor,"Scene: "+s.summary,"Shot: "+h.size,"Camera: "+h.camera,"Action: "+h.action,"Cast: "+(h.cast||""),"Maintain strict continuity in faces, outfits and setting. No text or watermark."].join(". ")}
+function videoPrompt(s,h){return ["Animate this film still for 8 seconds",p.style,s.decor,h.action,"Camera movement: "+h.camera,"Framing: "+h.size,h.line?"French dialogue: "+h.line:"No dialogue","Natural sound and ambience; no music; no subtitles; do not change character identities."].join(". ")}
+const media=o=>o.image?'<img class="preview" alt="Image de référence" src="'+H(o.image)+'">':'';
+function render(){Q("#steps").innerHTML=names.map((name,i)=>'<button class="'+(i===step?'active':'')+'" data-step="'+i+'">'+(i+1)+". "+name+'</button>').join("");
+let v='<div class="hero"><span class="eyebrow">Étape '+(step+1)+' / 7 · Production film</span><h1>'+names[step]+'</h1><div class="sm">Projet : '+H(p.title)+' · '+H(p.genre)+' · '+H(p.ratio)+'</div></div>';
+if(step===0)v+='<section class="panel"><h2>Configuration IA</h2><p>Édition et export fonctionnent sans modèle. Pour générer, héberge ce dossier sur le serveur Python inclus, avec Ollama et ComfyUI.</p><div class="notice">GitHub Pages héberge uniquement la partie statique. Les appels IA exigent le serveur Python HTTPS derrière une authentification.</div><label>Jeton du serveur (facultatif en local)<input id="token" type="password" autocomplete="off" value="'+H(secret)+'"></label><div class="actions">'+action("token","Enregistrer le jeton")+action("health","Tester la connexion")+'</div><p id="health" class="sm"></p></section>';
+if(step===1)v+='<section class="panel"><h2>Direction artistique</h2><label>Genre<select data-field="genre" data-id="project">'+genres.map(g=>'<option '+(g===p.genre?'selected':'')+'>'+H(g)+'</option>').join("")+'</select></label><label>Ratio<select data-id="project" data-field="ratio">'+["16:9","9:16","1:1"].map(g=>'<option '+(g===p.ratio?'selected':'')+'>'+g+'</option>').join("")+'</select></label>'+f({...p,id:"project"},"style","Signature visuelle",true)+'<div class="actions">'+action("next","Écrire le synopsis","", "primary")+'</div></section>';
+if(step===2)v+='<section class="panel">'+f({...p,id:"project"},"title","Titre")+f({...p,id:"project"},"idea","Idée originale",true)+'<div class="actions">'+action("syn","Développer avec Ollama","", "primary")+action("original","Utiliser mon texte")+'</div>'+f({...p,id:"project"},"synopsis","Synopsis final modifiable",true)+'</section>';
+if(step===3)v+='<section class="panel"><h2>Casting et continuité</h2><div class="actions">'+action("casting","Créer les personnages avec Ollama","", "primary")+action("addchar","+ Personnage")+'</div><div class="grid">'+p.characters.map(c=>'<article class="card">'+media(c)+f(c,"name","Nom")+f(c,"role","Rôle")+f(c,"description","Description physique",true)+f(c,"outfit","Costume",true)+'<div class="actions">'+action("image","Générer portrait",c.id)+action("delchar","Supprimer",c.id)+'</div></article>').join("")+'</div></section>';
+if(step===4)v+='<section class="panel"><h2>Écriture des scènes</h2><div class="actions">'+action("scenes","Générer 5 scènes", "", "primary")+action("addscene","+ Scène")+'</div><div class="grid">'+p.scenes.map(s=>'<article class="card">'+media(s)+f(s,"title","Titre")+f(s,"summary","Résumé",true)+f(s,"decor","Décor",true)+f(s,"mood","Lumière / ambiance")+f(s,"dialogue","Dialogues",true)+'<div class="actions">'+action("image","Illustrer le décor",s.id)+action("delscene","Supprimer",s.id)+'</div></article>').join("")+'</div></section>';
+if(step===5)v+='<section class="panel"><h2>Découpage technique</h2><div class="actions">'+action("shots","Découper les scènes avec Ollama","", "primary")+'</div>'+p.scenes.map(s=>'<h3>'+H(s.title)+'</h3><div class="actions">'+action("addshot","+ Plan",s.id)+'</div><div class="grid">'+(s.shots||[]).map(h=>'<article class="card">'+media(h)+f(h,"size","Cadrage")+f(h,"camera","Caméra")+f(h,"action","Action",true)+f(h,"cast","Personnages")+f(h,"line","Dialogue",true)+'<div class="actions">'+action("image","Générer first frame",h.id)+action("delshot","Supprimer",h.id)+'</div></article>').join("")+'</div>').join("")+'</section>';
+if(step===6)v+='<section class="panel"><h2>Génération vidéo et exports</h2><p class="sm">Chaque plan doit posséder une image de départ. Les vidéos sont obtenues via un workflow ComfyUI image-to-video compatible. Le montage MP4 final n’est pas encore intégré.</p><div class="actions">'+action("prompts","Exporter prompts WAN / Flow","", "primary")+action("csv","Exporter liste des plans")+action("export","Exporter projet JSON")+'</div><div class="grid">'+shotPairs().map(({s,h},i)=>'<article class="card"><h3>Plan '+(i+1)+' · '+H(s.title)+'</h3>'+media(h)+'<p>'+H(h.action)+'</p>'+((h.videoId)?'<div class="sm">Vidéo sauvegardée · '+H(h.videoId)+'</div>':'')+'<div class="actions">'+action("video","Créer vidéo",h.id)+action("download","Télécharger vidéo",h.id)+'</div><details><summary>Prompts</summary><pre>'+H(imagePrompt(s,h))+'\n\n'+H(videoPrompt(s,h))+'</pre></details></article>').join("")+'</div></section>';
+v+='<div class="panel"><div class="actions">'+action("new","Nouveau film")+action("export","Exporter JSON")+action("import","Importer JSON")+'<input id="jsonFile" type="file" accept=".json,application/json" hidden></div><small class="sm">Sauvegarde sur cet appareil. Exporter régulièrement sur iOS, le navigateur pouvant supprimer des données.</small></div>';
+Q("#app").innerHTML=v;}
+function allItems(){return [...p.characters,...p.scenes,...shotPairs().map(x=>x.h)]}
+function find(id){return id==="project"?p:allItems().find(x=>x.id===id)}
+async function api(path,body,blob=false){const headers=secret?{"Authorization":"Bearer "+secret}:{};if(body)headers["Content-Type"]="application/json";const r=await fetch(path,{method:body?"POST":"GET",headers,body:body?JSON.stringify(body):undefined});if(!r.ok){let e;try{e=await r.json()}catch(e){}throw Error((e&&e.error)||"Serveur inaccessible HTTP "+r.status)}return blob?r.blob():r.json()}
+async function ai(system,prompt){const r=await api("./api/ai",{system,prompt});return r.result}
+function setBusy(on,label){busy=on;render();if(label)notice(label)}
+async function makeAI(kind){const system="Tu es un réalisateur et scénariste professionnel. Réponds seulement en objet JSON valide, pas en Markdown.";
+if(kind==="syn"){const d=await ai(system,"Développe l'idée suivante en un synopsis français de 8 phrases. JSON: {\"synopsis\":\"...\"}. Genre "+p.genre+". Idée: "+p.idea);p.synopsis=String(d.synopsis||p.idea)}
+if(kind==="casting"){const d=await ai(system,"Film: "+p.synopsis+". Crée 3 à 5 personnages. JSON: {\"characters\":[{\"name\":\"\",\"role\":\"\",\"description\":\"\",\"outfit\":\"\"}]}");p.characters=(d.characters||[]).slice(0,12).map(c=>({id:uid(),name:String(c.name||""),role:String(c.role||""),description:String(c.description||""),outfit:String(c.outfit||"")}))}
+if(kind==="scenes"){const d=await ai(system,"Film: "+p.synopsis+". Personnages: "+p.characters.map(c=>c.name).join(", ")+". Crée exactement 5 scènes cohérentes en français. JSON: {\"scenes\":[{\"title\":\"\",\"summary\":\"\",\"decor\":\"\",\"mood\":\"\",\"dialogue\":\"\"}]}");p.scenes=(d.scenes||[]).slice(0,12).map(s=>({id:uid(),title:String(s.title||""),summary:String(s.summary||""),decor:String(s.decor||""),mood:String(s.mood||""),dialogue:String(s.dialogue||""),shots:[]}))}
+if(kind==="shots"){for(const s of p.scenes){const d=await ai(system,"Scène: "+JSON.stringify(s)+". Découpe en 3-5 plans cinématographiques. JSON: {\"shots\":[{\"size\":\"\",\"camera\":\"\",\"action\":\"\",\"cast\":\"\",\"line\":\"\"}]}");s.shots=(d.shots||[]).slice(0,12).map(h=>({id:uid(),size:String(h.size||""),camera:String(h.camera||""),action:String(h.action||""),cast:String(h.cast||""),line:String(h.line||"")}))}}
+persist()}
+const delay=ms=>new Promise(r=>setTimeout(r,ms));
+async function mediaJob(mode,item){const pair=shotPairs().find(x=>x.h.id===item.id);const s=pair?.s||p.scenes.find(x=>x.id===item.id);let prompt=pair?imagePrompt(pair.s,pair.h):item.role!==undefined?"Full body character reference: "+item.name+". "+item.description+". "+item.outfit+". "+p.style:"Cinematic establishing frame: "+s.decor+". "+s.summary+". "+p.style;
+if(mode==="video"){if(!pair||!item.image)throw Error("Image de départ requise");prompt=videoPrompt(pair.s,pair.h)}
+const task=await api("./api/comfy/start",{mode,prompt,first_image:mode==="video"?item.image:null,ratio:p.ratio});const id=task.prompt_id;
+for(let t=0;t<240;t++){await delay(5000);const status=await api("./api/comfy/status?id="+encodeURIComponent(id));if(status.state==="error")throw Error(status.error||"Échec ComfyUI");if(status.state==="done"){const a=(status.assets||[]).find(a=>mode==="image"?/\.(png|jpe?g|webp)$/i.test(a.filename):/\.(mp4|webm|mov)$/i.test(a.filename));if(!a)throw Error("Workflow sans fichier de sortie "+mode);const qs=new URLSearchParams({filename:a.filename,subfolder:a.subfolder||"",type:a.type||"output"});const b=await api("./api/comfy/asset?"+qs,null,true);if(mode==="image"){if(b.size>4e6)throw Error("Image trop lourde (>4 Mo)");item.image=await new Promise((resolve,reject)=>{const fr=new FileReader;fr.onload=()=>resolve(fr.result);fr.onerror=reject;fr.readAsDataURL(b)})}else{if(!db)throw Error("IndexedDB requis pour la sauvegarde vidéo");const videoId=uid();await tx("media","readwrite",st=>st.put({id:videoId,blob:b}));item.videoId=videoId}await persist();return}}throw Error("Tâche en attente >20 minutes : vérifier ComfyUI")}
+function download(filename,data,mime){const blob=data instanceof Blob?data:new Blob([data],{type:mime||"text/plain"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),40000)}
+function filename(){return (p.title||"film").normalize("NFKD").replace(/[^a-z0-9_-]+/gi,"-").slice(0,40)||"film"}
+function promptPack(){return shotPairs().map(({s,h},i)=>"PLAN "+(i+1)+" / "+s.title+"\nIMAGE\n"+imagePrompt(s,h)+"\nVIDÉO\n"+videoPrompt(s,h)+"\n").join("\n-----------------\n")}
+async function dispatch(el){const action=el.dataset.act,id=el.dataset.id,target=find(id);
+if(action==="next"){step=Math.min(6,step+1);render();return}
+if(action==="token"){secret=Q("#token").value;sessionStorage.setItem("niko_token",secret);notice("Jeton conservé dans cet onglet");return}
+if(action==="health"){const d=await api("./api/health");Q("#health").textContent="Ollama: "+!!d.connected.ollama+" · ComfyUI: "+!!d.connected.comfyui+" · workflows: "+JSON.stringify(d.workflows);return}
+if(action==="original"){p.synopsis=p.idea;persist();render();return}
+if(action==="new"){if(!confirm("Créer un projet ? Le film en cours est conservé en stockage local."))return;p=blank();persist();step=1;render();return}
+if(action==="addchar"){p.characters.push({id:uid(),name:"Nouveau personnage",role:"",description:"",outfit:""});persist();render();return}
+if(action==="addscene"){p.scenes.push({id:uid(),title:"Nouvelle scène",summary:"",decor:"",mood:"",dialogue:"",shots:[]});persist();render();return}
+if(action==="addshot"){const s=p.scenes.find(x=>x.id===id);if(s)s.shots.push({id:uid(),size:"wide",camera:"static",action:"",cast:"",line:""});persist();render();return}
+if(action.startsWith("del")){if(!confirm("Supprimer cet élément ?"))return;p.characters=p.characters.filter(x=>x.id!==id);p.scenes=p.scenes.filter(x=>x.id!==id);p.scenes.forEach(s=>s.shots=s.shots.filter(x=>x.id!==id));persist();render();return}
+if(action==="export"){download(filename()+".json",JSON.stringify(p,null,2),"application/json");return}
+if(action==="prompts"){download(filename()+"-prompts.txt",promptPack());return}
+if(action==="csv"){const rows=["Scene;Cadrage;Camera;Action;Dialogue"].concat(shotPairs().map(({s,h})=>[s.title,h.size,h.camera,h.action,h.line].map(x=>'"'+String(x||"").replace(/"/g,'""')+'"').join(";")));download(filename()+"-plans.csv","\ufeff"+rows.join("\r\n"),"text/csv");return}
+if(action==="import"){Q("#jsonFile").click();return}
+if(action==="download"){if(!target?.videoId||!db)throw Error("Vidéo absente");const a=await tx("media","readonly",s=>s.get(target.videoId));if(!a?.blob)throw Error("Fichier introuvable");download(filename()+"-"+id.slice(0,8)+".mp4",a.blob);return}
+if(["syn","casting","scenes","shots","image","video"].includes(action)){setBusy(true,"Traitement en cours · conserve cet onglet ouvert");try{if(["image","video"].includes(action))await mediaJob(action,target);else await makeAI(action);notice("Opération terminée")}finally{setBusy(false)}}
+}
+document.addEventListener("click",e=>{const tab=e.target.closest("[data-step]");if(tab){step=+tab.dataset.step;render();return}const el=e.target.closest("[data-act]");if(!el||busy)return;dispatch(el).catch(e=>notice("Erreur : "+e.message))});
+document.addEventListener("change",e=>{const el=e.target;if(el.dataset.field){const x=find(el.dataset.id);if(x){x[el.dataset.field]=el.value;persist()}}if(el.id==="jsonFile"&&el.files?.[0]){el.files[0].text().then(raw=>{const a=JSON.parse(raw);if(!a||!Array.isArray(a.scenes)||!Array.isArray(a.characters))throw Error("Format invalide");if(!confirm("Importer ce film à la place du projet affiché ?"))return;p={...blank(),...a,id:uid()};persist();render();notice("Projet importé")}).catch(e=>notice("Import : "+e.message))}});
+init();
+</script></body></html>
