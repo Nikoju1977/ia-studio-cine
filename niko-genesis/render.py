@@ -52,11 +52,16 @@ def exec_ffmpeg(argv, timeout=900):
 
 
 def info(path):
-    payload = exec_ffmpeg(
-        ["ffprobe", "-v", "error", "-show_entries",
-         "format=duration:stream=codec_type", "-of", "json", str(path)], timeout=35
-    )
-    data = json.loads(payload)
+    try:
+        payload = exec_ffmpeg(
+            ["ffprobe", "-v", "error", "-show_entries",
+             "format=duration:stream=codec_type", "-of", "json", str(path)], timeout=35
+        )
+        data = json.loads(payload)
+    except RuntimeError as exc:
+        if "absent du serveur" in str(exc):
+            raise
+        raise ValueError("Rush vidéo illisible ou format non supporté") from exc
     streams = [s.get("codec_type") for s in data.get("streams", [])]
     dur = float(data.get("format", {}).get("duration") or 0)
     if "video" not in streams or not (0.1 < dur <= MAX_DURATION):
