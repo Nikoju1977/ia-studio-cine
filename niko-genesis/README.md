@@ -21,7 +21,29 @@ Pour un accès réseau, utiliser un **VPN ou un reverse proxy HTTPS authentifié
 
 **Implémenté** : genre, idée et synopsis, casting, descriptions physiques, décors, scènes, plans, prompts I2V, génération via API locale configurée, sauvegarde locale dans IndexedDB, import/export projet JSON, liste CSV, prompts Wan/Flow, export individuel de rush vidéo, interface tactile responsive.
 
-**Pas encore implémenté** : export MP4 final assemblé, synchronisation cloud chiffrée, verrouillage facial avec référence image de ComfyUI, application native App Store/Play Store et files de tâches durable côté serveur. Les médias vidéo sont conservés dans IndexedDB, et les fichiers vidéo ne sont **pas** inclus dans l'export JSON : télécharger les rushes séparément. Safari peut effacer du stockage : exporter régulièrement.
+**Implémenté en V2 (sur serveur Python avec FFmpeg et ffprobe)** : import de clips MP4/WebM/MOV depuis le téléphone, téléversement séquentiel avec reprise des éléments déjà envoyés, encodage uniforme H.264 720p/24 fps et AAC, montage chronologique jusqu'à 40 plans, sous-titres français intégrés au MP4 (piste `mov_text`) et export SRT indépendant. Le serveur conserve les médias et le statut des rendus dans `niko-genesis/.niko-media/`, même après fermeture du navigateur. En cas de redémarrage pendant un rendu, il faut cliquer sur **Assembler le film MP4** pour relancer le traitement. Le MP4 n'est généré que **sur le serveur FFmpeg** (pas via GitHub Pages).
+
+**Limites actuelles** : pas de piste musicale ajoutée automatiquement, pas de mixage audio avancé ni de transitions, pas de synchronisation cloud chiffrée, pas de reconnaissance/verrouillage des visages, pas d'application native sur App Store/Play Store. Le rendu conserve l'audio des rushes existants, ou ajoute une piste silencieuse lorsque le rush est muet. Les médias vidéo ne sont **pas** inclus dans l'export JSON. Sur iOS, télécharger des MP4 volumineux peut consommer beaucoup de mémoire vive. Prévoir du disque libre sur le serveur et effacer manuellement les anciens rendus de `.niko-media/` après récupération ; aucun nettoyage automatique n'est encore en place. Safari peut supprimer les médias du navigateur : exporter les projets et récupérer les rushes régulièrement.
+
+### Montage MP4, depuis un smartphone
+
+1. Installer **FFmpeg** et **ffprobe** sur le serveur ; contrôler avec `ffmpeg -version` et `ffprobe -version`.
+2. Ouvrir NIKO STUDIO à travers un tunnel/VPN ou un proxy HTTPS avec authentification, ou à l'adresse locale sur le serveur.
+3. Dans **Plans**, créer le découpage, puis dans **Vidéos**, produire ou importer un rush par plan depuis l'appareil.
+4. Cliquer sur **Assembler le film MP4**. Les rushes sont copiés dans le répertoire de travail du serveur et validés par `ffprobe`.
+5. Cliquer sur **Vérifier le rendu** (le statut se rafraîchit également pendant le rendu). Une fois terminé, utiliser **Télécharger MP4** ou **Sous-titres SRT**.
+
+Le format final est H.264/AAC, ratio sélectionné (16:9, 9:16, 1:1), images normalisées avec bandes si nécessaire. Les sous-titres sont intégrés sous forme de piste sélectionnable — ils ne sont **pas incrustés dans l'image**. L'affichage des pistes sélectionnables varie selon le lecteur mobile.
+
+### Tester le rendu
+
+```bash
+python -m py_compile niko-genesis/server.py niko-genesis/render.py
+python -m unittest discover -s niko-genesis/tests -v
+```
+
+Les tests de montage créent de petites vidéos synthétiques et contrôlent la présence des pistes H.264, AAC et `mov_text` dans le MP4. Les tests de génération IA réelle nécessitent toujours les modèles installés.
+
 
 ## Inspirations et crédits
 
@@ -39,4 +61,4 @@ Les idées fonctionnelles ont été adaptées ; les codes originaux et leurs lic
 python -m py_compile niko-genesis/server.py
 ```
 
-Le test de bout en bout (Ollama + checkpoints ComfyUI + export vidéo sur téléphone) nécessite le matériel et des workflows réels.
+La validation du rendu FFmpeg est automatisée. Le test de bout en bout (Ollama + checkpoints ComfyUI + téléchargement sur téléphone) nécessite toujours le matériel, les workflows et un appareil réel.

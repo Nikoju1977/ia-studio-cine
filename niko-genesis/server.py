@@ -13,6 +13,7 @@ import secrets
 import urllib.parse
 import urllib.request
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+from render import RenderStore
 
 BASE=Path(__file__).resolve().parent
 HOST=os.environ.get("HOST","127.0.0.1")
@@ -24,6 +25,7 @@ COMFY=os.environ.get("COMFY_URL","http://127.0.0.1:8188").rstrip("/")
 LIMIT=10_000_000
 PREFIX="/niko-genesis"
 FILES={"index.html","manifest.webmanifest","sw.js"}
+RENDER = RenderStore()
 
 def request_json(url,payload=None,timeout=120):
     data=None if payload is None else json.dumps(payload).encode()
@@ -106,6 +108,24 @@ class Handler(BaseHTTPRequestHandler):
             if not self.allowed():return
             try:
                 args=urllib.parse.parse_qs(u.query)
+                if path==PREFIX+"/api/render/status":
+                    return self.send_json(RENDER.status(args.get("id", [""])[0]))
+                if path in (PREFIX+"/api/render/download", PREFIX+"/api/render/subtitles"):
+                    file = RENDER.result_file(args.get("id", [""])[0], subtitle=path.endswith("/subtitles"))
+                    mime = "text/plain; charset=utf-8" if path.endswith("/subtitles") else "video/mp4"
+                    self.send_response(200)
+                    self.send_header("Content-Type", mime)
+                    self.send_header("Content-Length", str(file.stat().st_size))
+                    self.send_header("Content-Disposition", 'attachment; filename="' + ("niko-film.srt" if path.endswith("/subtitles") else "niko-film.mp4") + '"')
+                    self.send_header("Cache-Control", "no-store")
+                    self.send_header("X-Content-Type-Options", "nosniff")
+                    self.end_headers()
+                    with file.open("rb") as source:
+                        while True:
+                            chunk = source.read(1024*1024)
+                            if not chunk: break
+                            self.wfile.write(chunk)
+                    return
                 if path==PREFIX+"/api/health":
                     connected={}
                     for kind,url in (("ollama",OLLAMA+"/api/tags"),("comfyui",COMFY+"/system_stats")):
@@ -154,6 +174,15 @@ class Handler(BaseHTTPRequestHandler):
         if not urllib.parse.urlsplit(self.path).path.startswith(PREFIX+"/api/"):return self.send_error(404)
         if not self.allowed():return
         try:
+            path=urllib.parse.urlsplit(self.path).path
+            if path==PREFIX+"/api/render/upload":
+                args=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+                rid=args.get("id",[""])[0]
+                index=args.get("index",[""])[0]
+                if self.headers.get("Content-Type","").split(";")[0] not in ("video/mp4","video/webm","video/quicktime","application/octet-stream"):
+                    raise ValueError("Type vidéo non accepté")
+                length=int(self.headers.get("Content-Length","0"))
+                return self.send_json(RENDER.upload(rid,index,self.rfile,length))
             length=int(self.headers.get("Content-Length","0"))
             if length<1 or length>LIMIT:raise ValueError("Requête trop volumineuse")
             d=json.loads(self.rfile.read(length))
@@ -166,6 +195,8 @@ class Handler(BaseHTTPRequestHandler):
                 doc=request_json(OLLAMA+"/api/chat",{"model":MODEL,"messages":[{"role":"system","content":system},{"role":"user","content":prompt}],"stream":False,"format":"json"},timeout=300)
                 content=doc.get("message",{}).get("content","")
                 return self.send_json({"result":json.loads(content)})
+            if path==PREFIX+"/api/render/new":return self.send_json(RENDER.create(d))
+            if path==PREFIX+"/api/render/start":return self.send_json(RENDER.start(d.get("id","")))
             if path==PREFIX+"/api/comfy/start":return self.send_json(launch(d))
             return self.send_json({"error":"Route inconnue"},404)
         except Exception as exc:return self.send_json({"error":str(exc)[:400]},400 if isinstance(exc,(ValueError,FileNotFoundError,json.JSONDecodeError)) else 502)

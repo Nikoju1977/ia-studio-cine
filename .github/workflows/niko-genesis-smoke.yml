@@ -19,9 +19,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install FFmpeg for real film rendering tests
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version | head -n 1
       - name: Validate Python, PWA and embedded JavaScript
         run: |
-          python -m py_compile niko-genesis/server.py
+          python -m py_compile niko-genesis/server.py niko-genesis/render.py
+          python -m unittest discover -s niko-genesis/tests -v
           python -m json.tool niko-genesis/manifest.webmanifest > /dev/null
           python - <<'PY'
           from pathlib import Path
