@@ -649,6 +649,9 @@
         $('galleryEmpty').hidden = state.images.length > 0;
         $('gallery').hidden = state.images.length === 0;
         $('imageToolbar').hidden = !state.images.length;
+        $('stageEmpty').hidden = count > 0;
+        $('playBtn').disabled = count === 0;
+        if (!state.exportSession) $('exportBtn').disabled = count === 0;
       }
 
       function renderGallery() {
@@ -729,7 +732,7 @@
               image,
               loaded: true,
               included: true,
-              style: 'cinema',
+              style: 'auto',
               motion: 'zoom',
               intensity: 60,
               prompt: '',
@@ -1037,7 +1040,7 @@
         const p = clamp(localTime / Math.max(state.seconds, 0.001), 0, 1);
         const strength = clamp(item.intensity / 100, 0, 1);
         const config = parsePrompt(item.prompt);
-        const style = item.style || config.style || 'cinema';
+        const style = item.style && item.style !== 'auto' ? item.style : (config.style || 'cinema');
         const motion = config.motion || item.motion;
 
         let zoom = 1.045;
@@ -1458,6 +1461,7 @@
         renderCats();
         renderStyles();
         bind();
+        updateRecap();
         previewSettings();
       }
 
@@ -1486,6 +1490,7 @@
       document.head.appendChild(style);
       const simpleStyle = document.createElement('style');
       simpleStyle.textContent = `
+        [hidden]{display:none!important}
         .ai-panel .section-head{margin-bottom:10px}
         .ai-panel .ai-info{margin-bottom:12px;font-size:12px}
         #aiIdea{min-height:104px}
@@ -1826,7 +1831,7 @@
           setStatus('Génération impossible : ' + reason + hint, true);
         } finally {
           $$('aiGenerate').disabled = false;
-          refreshProvider();
+          $$('aiGenerate').textContent = provider.value === 'express' ? 'Créer mon prompt' : 'Générer avec l’IA';
         }
       });
 
