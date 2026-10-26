@@ -228,7 +228,7 @@ function createCanvas(img,mult=1){
 function showProcessed(c,label){
   processedCanvas=c;
   const container=$('image-result');container.replaceChildren(c);
-  $('image-result-empty').classList.add('hidden');
+  $('image-result-empty')?.classList.add('hidden');
   $('processed-info').textContent=label+' · '+c.width+' × '+c.height+' pixels';
   $('image-download').disabled=false;$('image-add').disabled=false;
 }
@@ -252,7 +252,7 @@ function gradePixels(c){
   ctx.putImageData(img,0,0);
 }
 async function applyLook(){
-  const img=await bitmap($('image-file').files[0]);
+  const img=await bitmap($('image-file')?.files[0]||$('neural-file')?.files[0]);
   try{
     const c=createCanvas(img);const ctx=c.getContext('2d');
     ctx.filter=LOOKS[look].css;ctx.drawImage(img,0,0);ctx.filter='none';
@@ -261,7 +261,7 @@ async function applyLook(){
   }finally{img.close?.();}
 }
 async function localEffect(effect){
-  const img=await bitmap($('image-file').files[0]);
+  const img=await bitmap($('image-file')?.files[0]||$('neural-file')?.files[0]);
   try{
     const factor=effect==='upscale'?2:1;
     const c=createCanvas(img,factor);const ctx=c.getContext('2d',{willReadFrequently:true});
@@ -563,7 +563,7 @@ function init(){
   bindAsync('image-add',()=>saveProcessed(true));
   bindAsync('analyze-audio',analyzeAudio);
   $('tts-speak').addEventListener('click',()=>{try{speak($('tts-text').value);}catch(e){notify(e.message,'error');}});
-  $('tts-stop').addEventListener('click',()=>speechSynthesis?.cancel());
+  $('tts-stop').addEventListener('click',()=>('speechSynthesis' in window) && speechSynthesis.cancel());
   $('agent-send').addEventListener('click',()=>{
     const value=$('agent-command').value.trim();if(value){$('agent-command').value='';agent(value);}
   });
