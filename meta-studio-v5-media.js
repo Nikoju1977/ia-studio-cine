@@ -84,7 +84,7 @@ function renderTimeline(){
       });
       lane.append(button);
     });
-    lane.addEventListener('click',e=>{if(e.target===lane)seek(pxToSeconds(e.clientX,lane));});
+    lane.onclick=e=>{if(e.target===lane)seek(pxToSeconds(e.clientX,lane));};
   });
   updateHeads();
 }
