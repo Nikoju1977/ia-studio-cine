@@ -1,0 +1,26 @@
+name: META-STUDIO PRO V5 Checks
+on:
+  push:
+    paths:
+      - "index.html"
+      - "meta-studio-v5*.js"
+      - "meta-studio-v5.css"
+      - "verify-v5.mjs"
+      - ".github/workflows/meta-studio-v5.yml"
+  workflow_dispatch:
+jobs:
+  static-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate module syntax
+        run: |
+          node --check meta-studio-v5-core.js
+          node --check meta-studio-v5-media.js
+      - name: Validate HTML / JS contracts
+        run: node verify-v5.mjs
