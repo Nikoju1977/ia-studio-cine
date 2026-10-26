@@ -251,7 +251,7 @@ function prepare(){
     const dot=document.createElement('i');dot.className='light';b.append(dot,document.createTextNode(name));
     caps.append(b);
   });
-  showKeys();log('META-STUDIO PRO V5 initialisé. Aucune clé conservée sur disque.','success');
+  showKeys();status('Prêt — importez des rushes ou configurez Agnes.','ok');log('META-STUDIO PRO V5 initialisé. Aucune clé conservée sur disque.','success');
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',prepare);
 else prepare();
