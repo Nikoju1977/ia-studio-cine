@@ -49,7 +49,7 @@ function renderTimeline(){
   }
   const h=document.createElement('div');h.className='playhead';ruler.append(h);
   validTypes.forEach(track=>{
-    const lane=$('tl-'+track);lane.replaceChildren();
+    const lane=$('tl-track-'+track);lane.replaceChildren();
     const title=document.createElement('span');title.className='lane-name';
     title.textContent=track.toUpperCase();lane.append(title);
     const ph=document.createElement('div');ph.className='playhead';lane.append(ph);
