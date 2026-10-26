@@ -209,7 +209,7 @@
       .gallery { grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); }
     }
   </style>
-  <title>MotionLibre — studio vidéo mobile gratuit</title>
+  <title>MotionLibre 1.3 — Photos, prompt IA et vidéo</title>
 </head>
 <body>
   <div class="ambient ambient-one" aria-hidden="true"></div>
@@ -234,8 +234,8 @@
         <div>
           <div class="eyebrow"><span class="tiny-star">✦</span> TON STUDIO CRÉATIF MOBILE</div>
           <h1>De tes photos<br>à <em>ton cinéma.</em></h1>
-          <p>Anime tes images, compose un film, ajoute des styles et de la musique. Gratuit, sans compte et sans crédits.</p>
-          <div class="hero-pills"><span>✧ Sans abonnement</span><span>◈ Photos privées</span><span>↗ Export vidéo</span></div>
+          <p>Importe tes images, imagine une scène et exporte ton film. Trois étapes, sans compte.</p>
+          <div class="hero-pills" aria-label="Les trois étapes"><span>1 · Photos</span><span>2 · Prompt</span><span>3 · Vidéo</span></div>
         </div>
       </section>
 
@@ -246,7 +246,7 @@
           <section class="panel" id="importPanel">
             <div class="section-head">
               <div class="section-index">01</div>
-              <div><h2>Mes photos</h2><p>Choisis tes images depuis ton téléphone.</p></div>
+              <div><h2>Ajoute tes photos</h2><p>Importe une ou plusieurs images.</p></div>
               <span id="photoCount" class="section-count">0 photo</span>
             </div>
 
@@ -283,8 +283,8 @@
 
           <section class="panel" id="stylesPanel">
             <div class="section-head">
-              <div class="section-index">02</div>
-              <div><h2>Direction artistique</h2><p>Un style différent pour chaque photo.</p></div>
+              <div class="section-index">✧</div>
+              <div><h2>Retouches avancées</h2><p>Styles et mouvements · facultatif</p></div>
             </div>
 
             <div class="chip-row" id="styleFilters" role="group" aria-label="Catégorie de styles"></div>
@@ -331,8 +331,8 @@
         <div class="work-right">
           <section class="panel preview-panel" id="previewPanel">
             <div class="section-head">
-              <div class="section-index">04</div>
-              <div><h2>Studio vidéo</h2><p>Prévisualise ton montage.</p></div>
+              <div class="section-index">▶</div>
+              <div><h2>Aperçu du film</h2><p>Regarde le résultat avant export.</p></div>
               <span class="live-pill"><span></span> LIVE</span>
             </div>
 
@@ -362,8 +362,8 @@
 
           <section class="panel export-panel" id="exportPanel">
             <div class="section-head">
-              <div class="section-index">05</div>
-              <div><h2>Créer & exporter</h2><p>Réglages finaux de ton film.</p></div>
+              <div class="section-index">03</div>
+              <div><h2>Exporte ta vidéo</h2><p>Choisis le format, puis télécharge ton film.</p></div>
             </div>
 
             <div class="settings-grid">
@@ -424,7 +424,7 @@
               <div><span>Format</span><strong id="recapRatio">9:16</strong></div>
             </div>
 
-            <button type="button" id="exportBtn" class="export-button"><span class="export-icon">▶</span> Générer ma vidéo <span class="export-arrow">↗</span></button>
+            <button type="button" id="exportBtn" class="export-button"><span class="export-icon">▶</span> Exporter ma vidéo <span class="export-arrow">↗</span></button>
 
             <div id="exportProgress" class="export-progress" hidden>
               <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
@@ -450,14 +450,14 @@
       <section class="info-panel">
         <div class="info-symbol">◈</div>
         <div>
-          <h3>Montage local · IA au choix</h3>
-          <p>Le montage et l’export restent locaux. L’assistant IA peut s’exécuter sur l’appareil, via Ollama, ou avec une clé Mistral si tu choisis un modèle distant.</p>
+          <h3>Photos privées, création simple</h3>
+          <p>Le montage reste sur ton appareil. Le mode express ne nécessite aucun téléchargement. Les modèles SmolLM2 et Ollama sont locaux ; Mistral AI est distant et optionnel.</p>
         </div>
       </section>
     </main>
 
     <footer>
-      <span>MotionLibre <span id="versionLabel">v1.2 IA</span></span>
+      <span>MotionLibre <span id="versionLabel">v1.3 · Simple</span></span>
       <span>Créé pour le mobile · traitement local</span>
     </footer>
   </div>
@@ -1468,7 +1468,7 @@
   <script>
     (() => {
       'use strict';
-      const host = document.getElementById('stylesPanel');
+      const host = document.getElementById('importPanel');
       const target = document.getElementById('promptInput');
       if (!host || !target) return;
 
@@ -1484,18 +1484,100 @@
         .ai-controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:3px}.ai-primary,.ai-secondary{border-radius:10px;padding:12px 13px;font-size:12px;font-weight:800;border:1px solid #65507f;cursor:pointer}.ai-primary{background:linear-gradient(105deg,#e4b7ff,#a3a1ff);color:#221429;border:0;flex:1}.ai-secondary{background:#342840;color:#e4caff;flex:1}.ai-status{color:#d3bce8;font-size:11px;min-height:15px;line-height:1.5;margin:2px 0 0;white-space:pre-wrap}.ai-status.ai-error{color:#ffb2ba}.ai-output{background:#141621;border:1px solid #65507f;border-radius:12px;padding:12px;margin-top:8px}.ai-output textarea{min-height:115px}.ai-hidden{display:none!important}.ai-split{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:420px){.ai-split{grid-template-columns:1fr}}
       `;
       document.head.appendChild(style);
+      const simpleStyle = document.createElement('style');
+      simpleStyle.textContent = `
+        .ai-panel .section-head{margin-bottom:10px}
+        .ai-panel .ai-info{margin-bottom:12px;font-size:12px}
+        #aiIdea{min-height:104px}
+        #stylesPanel.is-compact > :not(.section-head){display:none!important}
+        #stylesPanel.is-compact .section-head{margin-bottom:0}
+        .advanced-toggle,.export-toggle{margin-left:auto;border:1px solid rgba(190,175,255,.28);background:rgba(180,160,255,.09);color:#ece6ff;padding:10px 12px;border-radius:12px;cursor:pointer;font:inherit;font-size:12px;font-weight:750;white-space:nowrap}
+        #exportPanel.is-compact .settings-grid > :not(:first-child){display:none!important}
+        #exportPanel.is-compact .settings-grid{grid-template-columns:minmax(0,1fr)}
+        .export-toggle{margin:10px 0 0;display:block;width:100%}
+        #cancelExport{border:1px solid rgba(255,170,180,.35);color:#ffc4cf;background:transparent;border-radius:10px;padding:9px 15px;cursor:pointer;margin-top:10px}
+        .ai-panel .ai-subtle{font-size:11px}
+        .work-grid #aiPanel{scroll-margin-top:20px}
+        .canvas-stage{max-width:330px;margin-inline:auto}
+        .hero{padding-bottom:24px}.hero h1{font-size:clamp(2.3rem,4vw,4.2rem)}.hero p{font-size:0.94rem;margin-top:12px}
+        @media(max-width:980px) {
+          .work-grid{display:flex;flex-direction:column}
+          .work-left,.work-right{display:contents}
+          .work-grid #importPanel{order:1}
+          .work-grid #aiPanel{order:2!important}
+          .work-grid #stylesPanel{order:3}
+          .work-grid #previewPanel{order:4}
+          .work-grid #exportPanel{order:5!important}
+        }
+        @media(max-width:560px) {
+          .hero{padding:0 2px 18px}
+          .hero h1{font-size:2.45rem}
+          .hero-pills span{padding:7px 10px;font-size:11px}
+          .canvas-stage{max-width:258px}
+          .ai-split{grid-template-columns:1fr 1fr}
+          .work-grid{gap:12px}
+          .advanced-toggle{font-size:11px;padding:8px}
+          .section-head h2{font-size:1rem}
+        }
+`;
+      document.head.appendChild(simpleStyle);
+
+      // Réglages avancés optionnels : n'encombrent plus le parcours principal.
+      const art = document.getElementById('stylesPanel');
+      if (art) {
+        art.classList.add('is-compact');
+        const header = art.querySelector('.section-head');
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'advanced-toggle';
+        toggle.textContent = 'Personnaliser';
+        toggle.setAttribute('aria-expanded','false');
+        header.append(toggle);
+        toggle.addEventListener('click', () => {
+          const compact = art.classList.toggle('is-compact');
+          toggle.textContent = compact ? 'Personnaliser' : 'Masquer';
+          toggle.setAttribute('aria-expanded', String(!compact));
+        });
+      }
+      const exportPanel = document.getElementById('exportPanel');
+      const exportSettings = exportPanel?.querySelector('.settings-grid');
+      if (exportSettings) {
+        exportPanel.classList.add('is-compact');
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'export-toggle';
+        toggle.textContent = 'Qualité, durée et transitions';
+        toggle.setAttribute('aria-expanded', 'false');
+        exportSettings.insertAdjacentElement('afterend', toggle);
+        toggle.addEventListener('click', () => {
+          const compact = exportPanel.classList.toggle('is-compact');
+          toggle.textContent = compact ? 'Qualité, durée et transitions' : 'Réduire les options';
+          toggle.setAttribute('aria-expanded', String(!compact));
+        });
+      }
+      // Permet d'annuler PENDANT l'export, avant que le résultat n'apparaisse.
+      const cancel = document.getElementById('cancelExport');
+      const progress = document.getElementById('exportProgress');
+      if (cancel && progress) progress.append(cancel);
+
 
       const panel = document.createElement('section');
       panel.id = 'aiPanel';
       panel.className = 'panel ai-panel';
       panel.innerHTML = `
-        <div class="section-head"><div class="section-index">03</div><div><h2>Assistant IA vidéo locale</h2><p>Une mise en scène pensée pour tes images.</p></div></div>
-        <p class="ai-info">Décris ta scène et laisse l’IA écrire un prompt cinématographique. <strong>Seuls les effets reconnus par MotionLibre</strong> seront appliqués au montage ; l’IA ne génère pas de nouveaux visuels ni de sujets.</p>
+        <div class="section-head"><div class="section-index">02</div><div><h2>Imagine ton film</h2><p>Crée un prompt et applique-le à ta photo.</p></div></div>
+        <p class="ai-info">Décris une idée, même en quelques mots. Choisis le mode express pour un résultat immédiat, ou un modèle IA pour aller plus loin.</p>
         <div class="ai-form">
           <div>
-            <label for="aiProvider">Moteur de génération</label>
+            <label for="aiIdea">Décris la scène</label>
+            <textarea id="aiIdea" maxlength="800" placeholder="Ex. : une femme sous la pluie à Tokyo, atmosphère mélancolique, travelling lent, contraste fort, lumière bleutée"></textarea>
+          </div>
+
+          <div>
+            <label for="aiProvider">Comment créer le prompt ?</label>
             <select id="aiProvider">
-              <option value="browser">Sur cet appareil · SmolLM2 (open source)</option>
+              <option value="express">Express · instantané, sans IA</option>
+              <option value="browser">IA locale · SmolLM2 open source</option>
               <option value="ollama">Ollama · modèle local sur ordinateur</option>
               <option value="mistral">Mistral AI · API en ligne (optionnelle)</option>
             </select>
@@ -1528,11 +1610,6 @@
             <input id="aiMistralKey" type="password" autocomplete="off" placeholder="Entre ta clé API (optionnelle)">
           </div>
 
-          <div>
-            <label for="aiIdea">Ton intention de réalisation</label>
-            <textarea id="aiIdea" maxlength="800" placeholder="Ex. : une femme sous la pluie à Tokyo, atmosphère mélancolique, travelling lent, contraste fort, lumière bleutée"></textarea>
-          </div>
-
           <div class="ai-split">
             <div>
               <label for="aiTone">Atmosphère</label>
@@ -1557,16 +1634,16 @@
           </div>
 
           <div class="ai-controls">
-            <button id="aiGenerate" class="ai-primary" type="button">✦ Générer mon prompt avec l’IA</button>
+            <button id="aiGenerate" class="ai-primary" type="button">Créer mon prompt</button>
           </div>
 
-          <p id="aiStatus" class="ai-status" role="status" aria-live="polite">Mode local sélectionné. Aucun prompt envoyé à un serveur.</p>
+          <p id="aiStatus" class="ai-status" role="status" aria-live="polite">Mode express : prêt, aucun modèle à télécharger.</p>
 
           <div id="aiResult" class="ai-output ai-hidden">
             <label for="aiGenerated">Prompt généré · modifiable</label>
             <textarea id="aiGenerated" maxlength="700" rows="5"></textarea>
             <div class="ai-controls">
-              <button id="aiApply" class="ai-secondary" type="button">Appliquer sur la photo</button>
+              <button id="aiApply" class="ai-primary" type="button">Appliquer à la photo choisie</button>
               <button id="aiCopy" class="ai-secondary" type="button">Copier</button>
             </div>
           </div>
@@ -1591,7 +1668,14 @@
         $$('aiBrowserInfo').classList.toggle('ai-hidden', choice !== 'browser');
         $$('aiOllamaSettings').classList.toggle('ai-hidden', choice !== 'ollama');
         $$('aiMistralSettings').classList.toggle('ai-hidden', choice !== 'mistral');
-        setStatus(choice === 'browser' ? 'Calcul local sur cet appareil, après téléchargement du modèle.' : choice === 'ollama' ? 'Calcul via le serveur Ollama que tu as choisi, en local si configuré.' : 'Calcul via Mistral AI. Attention: service externe, clé requise.');
+        generate.textContent = choice === 'express' ? 'Créer mon prompt' : 'Générer avec l’IA';
+        setStatus(choice === 'express'
+          ? 'Mode express : création instantanée, sans IA ni téléchargement.'
+          : choice === 'browser'
+          ? 'IA open source sur cet appareil. Premier lancement : téléchargement du modèle.'
+          : choice === 'ollama'
+          ? 'Ollama doit être installé et accessible depuis ton navigateur.'
+          : 'Mistral AI est un service distant : une clé API est nécessaire.');
       }
 
       provider.addEventListener('change', refreshProvider);
@@ -1615,6 +1699,16 @@
         s = s.replace(/^\s*(?:assistant\s*[:：]|prompt\s*[:：]|réponse\s*[:：])\s*/i, '').replace(/^['"«\s]+|['"»\s]+$/g, '').trim();
         if (!s) throw new Error('Le modèle n’a renvoyé aucun prompt utilisable.');
         return s.slice(0, 700);
+      }
+
+      function expressGeneration() {
+        const scene = $$('aiIdea').value.trim().replace(/\s+/g, ' ');
+        if (!scene) throw new Error('Décris d’abord une scène.');
+        const tone = $$('aiTone').value;
+        const camera = $$('aiCamera').value;
+        return 'Plan cinématographique : ' + scene.slice(0, 390) +
+          '. ' + camera + ', ambiance ' + tone +
+          ', lumière travaillée, couleurs harmonieuses, vignette subtile. Conserver la composition et les sujets de la photo.';
       }
 
       async function getLocalGenerator() {
@@ -1716,17 +1810,23 @@
         $$('aiGenerate').textContent = 'Génération en cours…';
 
         try {
-          const result = provider.value === 'browser' ? await localGeneration(instruction) : provider.value === 'ollama' ? await ollamaGeneration(instruction) : await mistralGeneration(instruction);
+          const result = provider.value === 'express' ? expressGeneration() : provider.value === 'browser' ? await localGeneration(instruction) : provider.value === 'ollama' ? await ollamaGeneration(instruction) : await mistralGeneration(instruction);
           $$('aiGenerated').value = cleanPrompt(result);
           $$('aiResult').classList.remove('ai-hidden');
-          setStatus('Prompt généré. Vérifie-le et applique-le à ta photo.');
+          const photoSelected = !!document.querySelector('#gallery .thumb.active');
+          if (photoSelected) {
+            target.value = $$('aiGenerated').value;
+            target.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          setStatus((provider.value === 'express' ? 'Prompt express créé' : 'Prompt IA généré') +
+            (photoSelected ? ' et appliqué à ta photo.' : '. Ajoute une photo pour l’appliquer.'));
         } catch (e) {
           const reason = e.name === 'AbortError' ? 'Délai de connexion dépassé.' : (e.message || String(e));
           const hint = provider.value === 'browser' ? ' Vérifie la connexion du premier téléchargement, la mémoire du téléphone et la compatibilité du navigateur.' : provider.value === 'ollama' ? ' Vérifie que Ollama tourne sur le réseau local et que le modèle est bien téléchargé.' : ' Vérifie ta clé Mistral et la connexion internet.';
           setStatus('Génération impossible : ' + reason + hint, true);
         } finally {
           $$('aiGenerate').disabled = false;
-          $$('aiGenerate').textContent = '✦ Générer mon prompt avec l’IA';
+          refreshProvider();
         }
       });
 
@@ -1744,7 +1844,7 @@
         target.value = prompt.slice(0, 700);
         target.dispatchEvent(new Event('input', { bubbles: true }));
         setStatus('Prompt appliqué à la photo sélectionnée.', false);
-        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        document.getElementById('previewPanel')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       });
 
       $$('aiCopy').addEventListener('click', async () => {
