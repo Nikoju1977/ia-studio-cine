@@ -1,547 +1,210 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>AI STUDIO PRO | Master Edition (Niko)</title>
-    
-    <script>/* Studio Niko · helpers vague C */
-window.safeStorage = window.safeStorage || (function(){var mem=new Map(),ls=null;try{ls=window.localStorage;var t='__niko__';ls.setItem(t,'1');ls.removeItem(t);}catch(e){ls=null;}
-return{getItem:function(k){try{return ls?ls.getItem(k):(mem.has(k)?mem.get(k):null);}catch(e){return mem.has(k)?mem.get(k):null;}},
-setItem:function(k,v){try{if(ls){ls.setItem(k,String(v));return;}}catch(e){}mem.set(k,String(v));},
-removeItem:function(k){try{if(ls)ls.removeItem(k);}catch(e){}mem.delete(k);},
-clear:function(){try{if(ls)ls.clear();}catch(e){}mem.clear();},
-key:function(i){try{if(ls)return ls.key(i);}catch(e){}var a=Array.from(mem.keys());return i<a.length?a[i]:null;},
-get length(){try{if(ls)return ls.length;}catch(e){}return mem.size;}};})();
-window.nikoFetch = window.nikoFetch || function(url,opts){function xhr(){opts=opts||{};return new Promise(function(res,rej){var x=new XMLHttpRequest();x.open((opts.method||'GET'),url,true);if(opts.headers){Object.keys(opts.headers).forEach(function(h){try{x.setRequestHeader(h,opts.headers[h]);}catch(e){}});}x.onload=function(){res({ok:x.status>=200&&x.status<300,status:x.status,statusText:x.statusText,url:url,text:function(){return Promise.resolve(x.responseText);},json:function(){return Promise.resolve(JSON.parse(x.responseText));},headers:{get:function(n){return x.getResponseHeader(n);}}});};x.onerror=function(){rej(new TypeError('Network request failed'));};x.send(opts.body||null);});}
-if(window.fetch){return window.fetch(url,opts).catch(function(){return xhr();});}return xhr();};
-</script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
-    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
-    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    
-    <style>
-        :root { --accent: #e74c3c; --bg: #0a0a0a; --panel: #161616; --border: #333; --text: #ddd; --editor-bg: #ffffff; }
-        body {
-  padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px); font-family: 'Orbitron', -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
-        
-        header { background: #000; padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; z-index: 10; }
-        .title-bar { font-weight: 800; letter-spacing: 2px; color: var(--accent); text-transform: uppercase; font-size: 0.85rem; }
-        #model-status { font-size: 0.7rem; color: #00ff00; background: #1a2e1a; padding: 5px 12px; border-radius: 4px; border: 1px solid #2d4d2d; }
-
-        .main-container { display: grid; grid-template-columns: 260px 1fr 260px; flex-grow: 1; overflow: hidden; }
-        
-        .sidebar { background: var(--panel); border-right: 1px solid var(--border); padding: 15px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
-        .section-title { color: #555; font-size: 0.65rem; letter-spacing: 1.2px; margin: 15px 0 5px 0; text-transform: uppercase; font-weight: 900; }
-        
-        .nav-item { padding: 10px 12px; background: #222; border-radius: 5px; cursor: pointer; transition: 0.2s; font-size: 0.8rem; border: 1px solid transparent; text-align: left; color: #aaa; width: 100%; }
-        .nav-item:hover { border-color: var(--accent); color: #fff; }
-        .nav-item.active { background: var(--accent); color: #fff; font-weight: bold; }
-        .nav-item.finance { border-left: 3px solid #f1c40f; }
-
-        .editor-container { display: flex; flex-direction: column; background: var(--editor-bg); color: #111; position: relative; overflow-y: auto; }
-        .editor-header { background: #f4f4f4; padding: 10px 20px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 5; }
-        #view-title { font-weight: bold; font-family: 'Courier New', monospace; font-size: 0.95rem; color: #333; text-transform: uppercase; }
-        #word-count { font-size: 0.75rem; color: #666; font-weight: bold; }
-        
-        #main-editor { flex-grow: 1; padding: 40px; font-family: 'Courier New', monospace; font-size: 1.05rem; border: none; outline: none; resize: none; line-height: 1.6; min-height: 100%; color: #111; background: #fff; }
-
-        #storyboard-container { display: none; padding: 30px; background: #000; border-top: 4px solid var(--accent); grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; align-content: start; }
-        .storyboard-img { width: 100%; border-radius: 6px; box-shadow: 0 10px 25px rgba(0,0,0,0.6); border: 1px solid #333; transition: transform 0.3s; }
-        .storyboard-img:hover { transform: scale(1.02); border-color: var(--accent); }
-
-        .control-bar { background: #000; padding: 15px 25px; border-top: 1px solid var(--border); display: flex; gap: 15px; align-items: center; }
-        textarea.book-input { flex-grow: 1; height: 50px; background: #1a1a1a; border: 1px solid #333; color: white; padding: 10px; border-radius: 6px; font-size: 0.85rem; resize: none; transition: all 0.2s; }
-        textarea.book-input:focus { outline: none; border-color: var(--accent); }
-        textarea.book-input.dragover { border: 2px dashed var(--accent); background: #2a1616; }
-        
-        button { padding: 10px 18px; border-radius: 4px; cursor: pointer; border: none; font-weight: bold; transition: 0.2s; font-size: 0.75rem; text-transform: uppercase; }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-primary { background: var(--accent); color: white; height: 50px; min-width: 220px; }
-        .btn-primary:hover:not(:disabled) { filter: brightness(1.1); }
-        .btn-secondary { background: #333; color: #ccc; border: 1px solid #444; width: 100%; margin-top: 5px; }
-        .btn-secondary:hover { background: #444; color: #fff; }
-        .btn-pdf { background: #2980b9; color: white; border: none; }
-        .btn-pdf:hover { background: #3498db; }
-        .btn-pitch { background: #27ae60; color: white; border: none; }
-        .btn-pitch:hover { background: #2ecc71; }
-
-        .loading-overlay { position: absolute; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.95); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 999; }
-        .spinner { width: 45px; height: 45px; border: 4px solid #333; border-top: 4px solid var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 20px; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        #loader-text { font-size: 1.2rem; margin: 0; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: white; }
-        #loader-sub { color: #888; font-size: 0.9rem; margin-top: 10px; }
-    
-/* ── Skeleton Loader ─────────────────────────── */
-.skeleton{background:linear-gradient(90deg,rgba(0,255,157,.07) 25%,rgba(0,255,157,.15) 50%,rgba(0,255,157,.07) 75%);background-size:200% 100%;animation:skel-wave 1.4s infinite;border-radius:6px;min-height:1em}
-@keyframes skel-wave{0%{background-position:200% 0}100%{background-position:-200% 0}}
-
-
-/* ── GPU acceleration hints ── */
-@media (prefers-reduced-motion: no-preference) {
-  [class*="btn"],[class*="button"],[class*="card"],[class*="modal"],[class*="tab"],[class*="panel"] {
-    will-change: transform, opacity;
-    transform: translateZ(0);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  *,*::before,*::after { animation-duration:.01ms !important; transition-duration:.01ms !important; }
-}
-
-
-/* ── Dark mode system preference — Studio Niko Design ── */
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #f0f4f8;
-    --bg2: #e2e8f0;
-    --text: #1a202c;
-    --accent: #0070f3;
-  }
-  body { background: var(--bg); color: var(--text); }
-}
-
-</style>
-  <meta name="description" content="IA Studio Ciné — Interface IA pour la création cinématographique. Scripts, storyboards, analyse rushes.">
-  <meta name="author" content="Nicolas Julienne — Studio Niko Design">
-  <meta name="theme-color" content="#ff0080" media="(prefers-color-scheme: dark)">
-  <meta property="og:title" content="IA Studio Ciné | Studio Niko Design">
-  <meta property="og:description" content="Production vidéo IA — génération scripts, storyboards, analyse rushes, interface réalisateur">
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://nikoju1977.github.io/ia-studio-cine/">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="IA Studio Ciné | Studio Niko Design">
-  <meta name="twitter:description" content="Production vidéo IA — génération scripts, storyboards, analyse rushes, interface réalisateur">
-
-<link rel="manifest" href="manifest.json">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#090b11">
+<meta name="description" content="META-STUDIO PRO V5 — atelier de création cinéma, Agnes AI, montage, couleur et audio dans le navigateur.">
+<title>META-STUDIO PRO V5 — Atelier Cinéma</title>
+<link rel="stylesheet" href="./meta-studio-v5.css">
+<script type="module" src="./meta-studio-v5-media.js"></script>
 </head>
-<body role="application" aria-label="IA Studio Ciné — Production vidéo IA">
-<main id="app" tabindex="-1">
-<h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">IA Studio Ciné</h1>
-
-
-<header>
-    <div class="title-bar">🎬 STUDIO IA : MASTER PRODUCTION - DIR. NIKO</div>
-    <a href="./niko-genesis/" title="Accéder au nouveau studio cinéma open source" style="display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 14px;background:#e9bc67;color:#101929;border-radius:6px;font:700 12px system-ui;text-decoration:none;margin-left:auto">CINÉ GENESIS OPEN →</a>
-    <div id="model-status">MISTRAL API PRÊT</div>
+<body>
+<div class="app">
+<header class="topbar">
+  <div class="brand"><div class="mark" aria-hidden="true">M5</div><div><div class="eyebrow">Studio Niko Design · Creative tools</div><h1>META-STUDIO <span style="color:var(--gold)">PRO V5</span></h1><p class="sub">Création · Montage · Couleur · Son · IA</p></div></div>
+  <div class="top-status" id="caps" aria-label="Capacités du navigateur"><span class="pill">Initialisation…</span></div>
 </header>
+<div class="shell">
+<nav class="nav" aria-label="Modules">
+  <button type="button" data-view="studio" aria-selected="true">✦ Studio Agnes</button>
+  <button type="button" data-view="timeline" aria-selected="false">▤ Timeline</button>
+  <button type="button" data-view="looks" aria-selected="false">◈ Color Lab</button>
+  <button type="button" data-view="neural" aria-selected="false">◉ Outils image</button>
+  <button type="button" data-view="audio" aria-selected="false">♫ Audio</button>
+  <button type="button" data-view="agent" aria-selected="false">⌘ Agent local</button>
+  <button type="button" data-view="export" aria-selected="false">↥ Exports</button>
+  <div class="nav-foot">V5.0<br>Local-first · Sans clé embarquée<br>24 i/s · Design cinéma</div>
+</nav>
+<main class="workspace">
 
-<div class="main-container">
-    <div class="sidebar">
-        <div class="section-title">PHASE 1 : ADAPTATION</div>
-        <button class="nav-item active" onclick="switchView('bible', event)">📖 Analyse & Bible</button>
-        <button class="nav-item" onclick="switchView('narratif', event)">🗺️ Séquencier</button>
-        <button class="nav-item" onclick="switchView('script', event)">📜 Scénario (Fountain)</button>
-        
-        <div class="section-title">PHASE 2 : TECHNIQUE</div>
-        <button class="nav-item" onclick="switchView('technique', event)">🎥 Shot List</button>
-        <button class="nav-item" onclick="switchView('image', event)">📸 Storyboard Visuel</button>
-        <button class="nav-item" onclick="switchView('audio', event)">🔊 Sound Design</button>
-        <button class="nav-item" onclick="switchView('light', event)">💡 Set-up Lumière</button>
-
-        <div class="section-title">PHASE 3 : FINANCE</div>
-        <button class="nav-item finance" onclick="switchView('budget', event)">💰 Budget & Estimations</button>
-        
-        <div style="flex-grow: 1;"></div>
-        
-        <div class="section-title">EXPORTS PRODUCTEUR</div>
-        <button class="btn-secondary btn-pitch" onclick="exportPitchDeckPDF()">📊 PITCH DECK (.pdf)</button>
-        <button class="btn-secondary btn-pdf" onclick="exportScenarioPDF()">🖋️ SCÉNARIO PRO (.pdf)</button>
+<section class="view active" id="view-studio" aria-labelledby="studio-title">
+  <div class="view-header"><div><div class="eyebrow">01 / Production</div><h2 id="studio-title">Studio de génération</h2><p>Agnes AI pour les images, vidéos et idées. Importez aussi vos rushes.</p></div><span class="pill" id="results-count">0</span></div>
+  <div class="grid two">
+    <div class="panel">
+      <div class="panel-title">Direction artistique</div>
+      <label class="form-label" for="generation-mode">Production</label>
+      <select id="generation-mode"><option value="video">Vidéo — Agnes v2.0</option><option value="image">Image — Agnes Image 2.1</option><option value="chat">Assistant texte — Agnes 2.0</option></select>
+      <label class="form-label" for="prompt">Prompt / intention du plan</label>
+      <textarea id="prompt" rows="7" placeholder="Exemple : Plan large à l'aube, brume légère dans une forêt de Bretagne, caméra travelling lent, texture argentique 35 mm, lumière naturelle…" maxlength="2000"></textarea>
+      <div class="row">
+        <div class="field"><label class="form-label" for="aspect">Cadre</label><select id="aspect"><option value="16:9">16:9 · 1024×576</option><option value="9:16">9:16 · 576×1024</option><option value="1:1">1:1 · 1024×1024</option></select></div>
+        <div class="field" id="video-controls"><label class="form-label" for="frames">Durée vidéo</label><select id="frames"><option value="121">121 images · 5,04 s</option><option value="161">161 images · 6,71 s</option><option value="241">241 images · 10,04 s</option></select></div>
+      </div>
+      <div class="actions"><button class="btn primary" id="generate-btn">▶ Générer</button><button class="btn danger" id="stop-btn" disabled>■ Stop local</button></div>
+      <div id="chat-answer-box" class="panel hidden" style="margin-top:14px"><div class="panel-title">Réponse Agnes</div><p id="chat-answer" style="white-space:pre-wrap;overflow-wrap:anywhere"></p></div>
+      <p class="info">La génération nécessite une clé Agnes et un navigateur autorisé à contacter l’API (CORS). Arrêter une tâche ne garantit pas son annulation chez le fournisseur.</p>
     </div>
-
-    <div class="editor-container">
-        <div id="loader" class="loading-overlay">
-            <div class="spinner"></div>
-            <h2 id="loader-text">INITIALISATION...</h2>
-            <p id="loader-sub">Veuillez patienter.</p>
-        </div>
-        
-        <div class="editor-header">
-            <span id="view-title">ÉDITEUR : ANALYSE & BIBLE</span>
-            <span id="word-count">0 mots</span>
-        </div>
-        
-        <textarea id="main-editor" spellcheck="false" oninput="updateWordCount()"></textarea>
-        <div id="storyboard-container"></div>
+    <div class="grid">
+      <div class="panel">
+        <div class="panel-title">Connexion Agnes · session uniquement</div>
+        <div class="note">Ne placez jamais vos clés dans GitHub ou dans le code. Les clés sont gardées dans la mémoire de cet onglet, puis perdues à sa fermeture. En environnement public, privilégiez un proxy serveur authentifié.</div>
+        <label class="form-label" for="api-keys">Clés API (une par ligne)</label>
+        <textarea id="api-keys" rows="3" placeholder="Coller ici une ou plusieurs clés. Effacées du champ après ajout." spellcheck="false" autocomplete="off" style="-webkit-text-security:disc"></textarea>
+        <div class="row"><button class="btn small green" id="save-keys">Ajouter à la session</button><button class="btn small danger" id="clear-keys">Effacer les clés</button></div>
+        <p class="info" id="key-count">0 clé(s) en mémoire</p><div class="key-list" id="key-pills"></div>
+        <p class="info">Gestion des erreurs 401/403/429, respect du délai Retry-After, aucune promesse de débit supplémentaire.</p>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Importer des rushes</div>
+        <label class="form-label" for="import-media">Images ou vidéos depuis l’appareil</label>
+        <input id="import-media" type="file" accept="image/*,video/*" multiple>
+        <p class="info">Fichiers chargés uniquement dans cette page. Ajoutez-les ensuite à la timeline. Les grands rushes consomment de la mémoire et leurs URL locales ne survivent pas au rechargement.</p>
+      </div>
     </div>
+  </div>
+  <div class="panel" style="margin-top:16px">
+    <div class="row" style="justify-content:space-between"><div class="panel-title" style="margin:0">Médiathèque · résultats</div><span class="kicker">Derniers éléments en tête</span></div>
+    <div class="result-grid" id="results-grid" style="margin-top:15px"></div>
+    <div class="empty" id="results-empty" style="margin-top:15px">Les médias générés et importés apparaîtront ici.<br>Chaque média peut rejoindre la timeline.</div>
+  </div>
+</section>
 
-    <div class="sidebar" style="border-left: 1px solid var(--border); border-right: none;">
-        <div class="section-title">CLÉ API MISTRAL</div>
-        <input type="password" id="apiKey" placeholder="Collez votre clé ici..." style="width: 100%; box-sizing: border-box; background: #222; border: 1px solid #444; color: white; padding: 10px; border-radius: 4px; font-size: 0.8rem;">
-        
-        <div class="section-title">INFOS PRODUCTION</div>
-        <p style="font-size: 0.7rem; color: #999; line-height: 1.5;">
-            Générez le <strong>Pitch Deck</strong> en PDF. Il inclut une page de garde formelle, la Bible, le Budget estimatif, et tous les détails techniques formatés pour les investisseurs.
-        </p>
-    </div>
+<section class="view" id="view-timeline" aria-labelledby="timeline-title">
+ <div class="view-header"><div><div class="eyebrow">02 / Édition</div><h2 id="timeline-title">Timeline cinéma</h2><p>Prévisualisation et montage de clips, sons et textes à 24 i/s.</p></div><div><span class="kicker">Fin des pistes</span><strong id="project-duration" style="display:block;color:var(--gold);font-family:var(--mono)">00:00:00:00</strong></div></div>
+ <div class="grid two">
+  <div class="panel">
+   <div class="panel-title">Moniteur programme</div>
+   <div class="screen">
+    <video id="tl-video" class="hidden" playsinline preload="metadata"></video>
+    <img id="tl-image" class="hidden" alt="Photogramme courant">
+    <span class="placeholder" id="tl-placeholder">Aucun plan sous la tête de lecture</span>
+    <div id="tl-overlay" class="hidden" style="position:absolute;bottom:12%;left:7%;right:7%;text-align:center;font-size:clamp(13px,2.2vw,23px);font-weight:700;text-shadow:0 2px 8px #000,0 0 4px #000;white-space:pre-wrap;pointer-events:none"></div>
+   </div>
+   <div class="transport"><button class="btn small primary" id="tl-play">▶ Lecture</button><button class="btn small" id="tl-stop">■ Début</button><input id="timeline-scrub" type="range" min="0" max="60" step=".0416667" value="0" aria-label="Position de lecture"><span id="tl-timecode" class="timecode">00:00:00:00</span></div>
+  </div>
+  <div class="panel">
+   <div class="panel-title">Montage non destructif</div>
+   <p class="info" style="margin-top:0">Cliquer sur un clip pour le sélectionner, le glisser pour modifier sa position, cliquer sur la règle pour déplacer la tête de lecture.</p>
+   <div class="actions"><button class="btn small green" id="tl-add">+ Dernier média</button><button class="btn small" id="tl-cut">✂ Couper</button><button class="btn small danger" id="tl-delete">Supprimer</button></div>
+   <div class="metric"><span class="muted">Sélection</span><strong id="selection-info">Aucun clip</strong></div>
+   <label class="form-label" for="overlay-text">Texte à l’image</label>
+   <input id="overlay-text" type="text" placeholder="Titre, sous-titre ou annotation…">
+   <button id="tl-add-text" class="btn small">+ Overlay à la position courante (5 s)</button>
+   <p class="info">La lecture est un aperçu navigateur, pas un export de film assemblé. La coupe conserve les points d’entrée source.</p>
+  </div>
+ </div>
+ <div class="panel" style="margin-top:16px"><div class="panel-title">Pistes · V1 / A1 / TEXTE</div><div class="tl-scroll"><div class="timeline"><div id="tl-ruler" class="ruler"></div><div id="tl-video" class="lane"></div><div id="tl-audio" class="lane"></div><div id="tl-overlay" class="lane"></div></div></div><p class="download-tip">Astuce : espace = lecture/pause ; Suppr = retirer le clip sélectionné (hors champ de saisie).</p></div>
+</section>
+
+<section class="view" id="view-looks" aria-labelledby="looks-title">
+ <div class="view-header"><div><div class="eyebrow">03 / Image</div><h2 id="looks-title">Color Lab</h2><p>Looks cinéma et ajustements colorimétriques dans le navigateur.</p></div></div>
+ <div class="grid two">
+  <div class="panel">
+   <div class="panel-title">Looks créatifs · non ACES</div><div id="looks" class="lutgrid"></div>
+   <label class="form-label" for="image-file">Image de travail</label><input type="file" id="image-file" accept="image/*">
+   <div class="range-line"><label for="grade-lift">Lift</label><input id="grade-lift" type="range" min="-100" max="100" value="0"><output id="grade-val-lift">0</output></div>
+   <div class="range-line"><label for="grade-gamma">Gamma</label><input id="grade-gamma" type="range" min="-100" max="100" value="0"><output id="grade-val-gamma">0</output></div>
+   <div class="range-line"><label for="grade-gain">Gain</label><input id="grade-gain" type="range" min="-100" max="100" value="0"><output id="grade-val-gain">0</output></div>
+   <div class="range-line"><label for="grade-sat">Saturation</label><input id="grade-sat" type="range" min="0" max="200" value="100"><output id="grade-val-sat">100</output></div>
+   <button id="image-grade" class="btn primary" style="width:100%;margin-top:12px">Appliquer le look</button>
+   <p class="info">Traitement RGB 8 bits dans Canvas. Ce module ne remplace ni ACES 1.3 ni un étalonnage professionnel en espace linéaire.</p>
+  </div>
+  <div class="panel">
+   <div class="panel-title">Image traitée</div>
+   <div id="image-result" class="screen"><span class="placeholder" id="image-result-empty">Une image traitée apparaîtra ici</span></div>
+   <p class="status-line" id="processed-info">Aucun traitement réalisé</p>
+   <div class="actions"><button class="btn green" id="image-download" disabled>↓ PNG</button><button class="btn" id="image-add" disabled>+ Médiathèque</button></div>
+  </div>
+ </div>
+</section>
+
+<section class="view" id="view-neural" aria-labelledby="neural-title">
+ <div class="view-header"><div><div class="eyebrow">04 / Traitement local</div><h2 id="neural-title">Outils image</h2><p>Effets natifs sans téléchargement de modèles neuronaux.</p></div></div>
+ <div class="grid two">
+  <div class="panel">
+   <div class="panel-title">Analyse & transformation native</div>
+   <div class="note">Ces traitements sont <strong>algorithmiques</strong>, pas des inférences SlimSAM/Depth Anything/Swin2SR. La luminance ne fournit pas une vraie carte de profondeur.</div>
+   <label class="form-label" for="neural-file">Image source</label><input id="neural-file" type="file" accept="image/*">
+   <div class="range-line"><label for="mask-threshold">Seuil masque</label><input id="mask-threshold" type="range" min="0" max="100" value="50"><output id="mask-val">50%</output></div>
+   <div class="actions"><button class="btn green" id="image-mask">Masque luminance</button><button class="btn" id="image-depth">Pseudo-profondeur</button><button class="btn" id="image-upscale">Redimensionner ×2</button></div>
+   <p class="info">Résultat visible dans Color Lab ; bouton « + Médiathèque » pour l’exploiter en timeline. Le redimensionnement ×2 ne reconstruit pas de nouveaux détails.</p>
+  </div>
+  <div class="panel"><div class="panel-title">Pipeline V5</div>
+   <div class="metric"><span>Traitements Canvas 2D</span><strong>Prêts</strong></div>
+   <div class="metric"><span>Véritable segmentation IA</span><strong class="muted">Non installée</strong></div>
+   <div class="metric"><span>Inférence profondeur IA</span><strong class="muted">Non installée</strong></div>
+   <div class="metric"><span>Super-résolution IA</span><strong class="muted">Non installée</strong></div>
+   <p class="info">Cette version retire les appels Transformers.js non fiabilisés de la V4. Une future version pourra utiliser des modèles validés et un backend sécurisé.</p>
+  </div>
+ </div>
+</section>
+
+<section class="view" id="view-audio" aria-labelledby="audio-title">
+ <div class="view-header"><div><div class="eyebrow">05 / Son</div><h2 id="audio-title">Audio & voix</h2><p>Import audio, balance d’écoute et synthèse vocale système.</p></div></div>
+ <div class="grid two">
+  <div class="panel">
+   <div class="panel-title">Mixage d’écoute des pistes importées</div>
+   <div class="range-line"><label for="vol-dialogue">Dialogue</label><input id="vol-dialogue" type="range" min="0" max="100" value="80"><output id="val-dialogue">80%</output></div>
+   <div class="range-line"><label for="vol-music">Musique</label><input id="vol-music" type="range" min="0" max="100" value="25"><output id="val-music">25%</output></div>
+   <div class="range-line"><label for="vol-ambience">Ambiance</label><input id="vol-ambience" type="range" min="0" max="100" value="45"><output id="val-ambience">45%</output></div>
+   <label class="form-label" for="audio-track-file">Importer une piste son</label><input id="audio-track-file" type="file" accept="audio/*">
+   <label class="form-label" for="audio-kind">Catégorie</label><select id="audio-kind"><option value="dialogue">Dialogue</option><option value="music">Musique</option><option value="ambience">Ambiance</option></select>
+   <p class="info">Le son est positionné à la tête de lecture et mixé à l’écoute. Aucun rendu multipiste final n’est effectué dans le navigateur.</p>
+  </div>
+  <div class="panel">
+   <div class="panel-title">Analyse de niveau RMS</div>
+   <label class="form-label" for="audio-file">Fichier audio pour analyse</label><input id="audio-file" type="file" accept="audio/*">
+   <div class="metric"><span>Niveau moyen</span><strong id="audio-db">— dBFS RMS</strong></div>
+   <div class="meter"><span id="audio-meter-fill"></span></div>
+   <p class="info" id="audio-info">Calcul sur PCM décodé, sans filtre de pondération ni gating EBU R128. Ne pas interpréter comme mesure LUFS certifiée.</p>
+   <button class="btn green" id="analyze-audio" style="width:100%;margin-top:12px">Analyser le signal</button>
+   <div style="border-top:1px solid var(--edge);margin:20px 0"></div>
+   <div class="panel-title">Voix système · TTS</div>
+   <label class="form-label" for="tts-lang">Langue</label><select id="tts-lang"><option value="fr-FR">Français</option><option value="en-US">English</option><option value="es-ES">Español</option><option value="de-DE">Deutsch</option></select>
+   <label class="form-label" for="tts-text">Texte à prononcer</label><textarea id="tts-text" rows="3" placeholder="Une voix raconte…"></textarea>
+   <label class="form-label" for="tts-rate">Vitesse de lecture</label><input type="range" id="tts-rate" min=".6" max="1.5" step=".1" value="1">
+   <div class="actions"><button class="btn green" id="tts-speak">▶ Parler</button><button class="btn" id="tts-stop">■ Arrêter</button></div>
+  </div>
+ </div>
+</section>
+
+<section class="view" id="view-agent" aria-labelledby="agent-title">
+ <div class="view-header"><div><div class="eyebrow">06 / Commandes</div><h2 id="agent-title">Agent local</h2><p>Raccourcis textuels pour piloter le studio. Pas de LLM local caché.</p></div></div>
+ <div class="panel" style="max-width:850px">
+  <div id="agent-log" class="chatlog" aria-live="polite"><div class="bubble system">Bienvenue dans l’agent de commandes V5.<br>Exemples : statut · ajouter · couper · supprimer · générer image : forêt au crépuscule · parler : bonjour · look : noir</div></div>
+  <label class="form-label" for="agent-command">Commande</label>
+  <div class="row"><input class="grow" id="agent-command" type="text" placeholder="Que doit faire le studio ?" autocomplete="off"><button id="agent-send" class="btn primary">Envoyer</button></div>
+ </div>
+</section>
+
+<section class="view" id="view-export" aria-labelledby="export-title">
+ <div class="view-header"><div><div class="eyebrow">07 / Livraison</div><h2 id="export-title">Exports & projets</h2><p>Médias originaux et formats d’échange pour vos logiciels de montage.</p></div></div>
+ <div class="grid two">
+  <div class="panel">
+   <div class="panel-title">Exporter</div>
+   <label class="form-label" for="export-format">Format</label>
+   <select id="export-format"><option value="media">Fichier média original (sans transcodage)</option><option value="zip">Archive ZIP · médias disponibles + projet</option><option value="project">Projet META-STUDIO V5 · JSON</option><option value="edl">CMX 3600 · EDL</option><option value="otio">OpenTimelineIO · JSON</option><option value="fcpxml">Final Cut Pro · FCPXML (références média)</option></select>
+   <label class="form-label" for="export-source">Source (média original)</label><select id="export-source"><option value="last">Dernier média</option><option value="first">Premier média</option><option value="all">Tous les médias (ZIP)</option></select>
+   <button id="export-button" class="btn primary" style="width:100%;margin-top:17px">↓ Exporter</button>
+   <p class="info">Le fichier source conserve son format d’origine. Pas d’encodage WebCodecs/MP4 du montage, pas de mixage rendu, pas d’export ProRes. Les URL temporaires doivent rester accessibles.</p>
+  </div>
+  <div class="panel">
+   <div class="panel-title">Reprendre un projet</div>
+   <label class="form-label" for="import-project">Importer un projet JSON V5</label><input type="file" id="import-project" accept=".json,application/json">
+   <p class="info">Les pistes et les références distantes sont restaurées. Les médias locaux importés sous URL <code>blob:</code> doivent être réimportés après fermeture du navigateur. Sauvegardez toujours les fichiers sources indépendamment.</p>
+   <div class="note">Formats EDL, OTIO et FCPXML : échange de structure et de références. La compatibilité exacte dépend du logiciel de montage et de l’accessibilité des médias.</div>
+  </div>
+ </div>
+ <div class="panel" style="margin-top:16px">
+  <div class="row" style="justify-content:space-between"><div class="panel-title" style="margin:0">Journal de production</div><div class="row"><button class="btn small" id="copy-log">Copier</button><button class="btn small" id="clear-log">Effacer</button></div></div>
+  <div class="log" id="journal" role="log" aria-live="polite"></div>
+ </div>
+</section>
+
+<div id="global-status" role="status" class="status-line">Initialisation…</div>
+</main></div>
+<footer class="footer">META-STUDIO PRO V5 · Studio Niko Design · Outil créatif local-first · © 2026</footer>
 </div>
-
-<div class="control-bar">
-    <textarea class="book-input" id="bookInput" placeholder="Glissez-déposez un livre complet (PDF, DOCX) ou du texte ici..."></textarea>
-    <button class="btn-primary" id="launchBtn">🚀 GÉNÉRER LE PITCH DECK</button>
-</div>
-
-<script type="module">
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
-    
-    let data = { bible: "", narratif: "", script: "", technique: "", image: "", audio: "", light: "", budget: "" };
-    let currentView = 'bible';
-
-    const AGENTS = {
-        narratif: { prompt: "Tu es Scénariste. Transforme la Bible en séquences cinématographiques. Format : SÉQUENCE N° - LIEU - ACTION SYNTHÉTIQUE.", model: "mistral-large-latest" },
-        script: { prompt: "Tu es Dialoguiste. Rédige le scénario STRICTEMENT au format FOUNTAIN. MAJUSCULES pour les personnages, actions au présent, format texte brut.", model: "mistral-large-latest" },
-        technique: { prompt: "Tu es Assistant Réal. Crée une Shot List détaillée (Valeur de plan, mouvement, focale) basée sur le script.", model: "mistral-small-latest" },
-        image: { prompt: "Tu es Chef Opérateur. À la fin de ton analyse, génère EXACTEMENT 4 PROMPTS visuels en anglais, encadrés par [PROMPT: et ].", model: "mistral-small-latest" },
-        audio: { prompt: "Tu es Sound Designer. Liste les ambiances continues, les effets synchrones (SFX) et le soundscape.", model: "mistral-small-latest" },
-        light: { prompt: "Tu es Chef Électricien. Détaille le set-up lumière technique.", model: "mistral-small-latest" },
-        budget: { prompt: "Tu es Directeur de Production (Line Producer). Analyse ce projet. Génère un 'Top-Sheet Budget' professionnel incluant : 1. Estimation jours de tournage. 2. Répartition financière par département. 3. Amortissements et provisions.", model: "mistral-large-latest" }
-    };
-
-    async function callMistral(systemPrompt, userContent, model) {
-        const key = document.getElementById("apiKey").value.trim();
-        if(!key) throw new Error("Clé API Mistral manquante. Veuillez la renseigner à droite.");
-
-        const response = await nikoFetch("https://api.mistral.ai/v1/chat/completions", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
-            body: JSON.stringify({
-                model: model,
-                messages: [
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: userContent }
-                ],
-                temperature: 0.7
-            })
-        });
-        
-        if (!response.ok) {
-            const errData = await response.json();
-            throw new Error(`Erreur API: ${errData.message || response.statusText}`);
-        }
-        
-        const res = await response.json();
-        return res.choices[0].message.content;
-    }
-
-    function chunkText(text, maxChars = 15000) {
-        const chunks = [];
-        let i = 0;
-        while (i < text.length) {
-            let chunk = text.substring(i, i + maxChars);
-            let lastPeriod = chunk.lastIndexOf('.');
-            if (lastPeriod > maxChars * 0.5 && i + maxChars < text.length) {
-                chunk = chunk.substring(0, lastPeriod + 1);
-                i += lastPeriod + 1;
-            } else { i += maxChars; }
-            chunks.push(chunk);
-        }
-        return chunks;
-    }
-
-    async function runProduction() {
-        const input = document.getElementById("bookInput").value.trim();
-        if(!input) return alert("Veuillez d'abord fournir un manuscrit !");
-        if(!document.getElementById("apiKey").value.trim()) return alert("Clé API requise !");
-        
-        document.getElementById("launchBtn").disabled = true;
-        
-        try {
-            updateLoader("PRÉPARATION DU MANUSCRIT...", "Découpage intelligent en cours");
-            const bookChunks = chunkText(input, 15000);
-            
-            let globalBible = "";
-            for (let i = 0; i < bookChunks.length; i++) {
-                updateLoader(`ANALYSE BIBLE : PARTIE ${i + 1} SUR ${bookChunks.length}...`, "Extraction des arcs dramatiques");
-                const systemPrompt = "Tu es Script-Doctor. Analyse le texte. Identifie thèmes, lieux et personnages. Si une bible existe déjà, METS-LA À JOUR et enrichis-la.";
-                const userPrompt = globalBible === "" 
-                    ? `Début de l'histoire :\n\n${bookChunks[i]}`
-                    : `Bible actuelle :\n${globalBible}\n\nSuite de l'histoire, intègre ces éléments :\n${bookChunks[i]}`;
-                globalBible = await callMistral(systemPrompt, userPrompt, "mistral-large-latest");
-            }
-            data.bible = globalBible;
-
-            let currentContext = globalBible;
-            const steps = Object.keys(AGENTS);
-
-            for (let step of steps) {
-                updateLoader(`GÉNÉRATION : ${step.toUpperCase()}...`, `Agent au travail`);
-                let promptUser = `Voici le matériel de base :\n\n${currentContext}`;
-                if(step === 'budget') {
-                    promptUser = `Voici la Bible :\n${data.bible}\n\nVoici le Scénario :\n${data.script}\n\nÉtablis le budget.`;
-                }
-                const result = await callMistral(AGENTS[step].prompt, promptUser, AGENTS[step].model);
-                data[step] = result;
-                
-                if (step === 'narratif') currentContext = "Basé sur ce séquencier :\n" + data.narratif;
-                if (step === 'script') currentContext = "Basé sur ce scénario :\n" + data.script;
-            }
-
-            hideLoader();
-            switchView('budget'); 
-            
-        } catch (error) {
-            console.error(error);
-            alert(`Arrêt : ${error.message}`);
-            hideLoader();
-        } finally {
-            document.getElementById("launchBtn").disabled = false;
-        }
-    }
-
-    const dropZone = document.getElementById("bookInput");
-    dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("dragover"); });
-    dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
-    dropZone.addEventListener("drop", async (e) => {
-        e.preventDefault(); 
-        dropZone.classList.remove("dragover");
-        const file = e.dataTransfer.files[0];
-        if (!file) return;
-
-        const ext = file.name.split('.').pop().toLowerCase();
-        updateLoader("LECTURE DU FICHIER...", file.name);
-        
-        try {
-            if (ext === 'txt') { dropZone.value = await file.text(); } 
-            else if (ext === 'docx') {
-                const res = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
-                dropZone.value = res.value;
-            } else if (ext === 'pdf') {
-                const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
-                let fullText = "";
-                for (let i = 1; i <= pdf.numPages; i++) {
-                    const page = await pdf.getPage(i);
-                    const content = await page.getTextContent();
-                    fullText += content.items.map(item => item.str).join(" ") + "\n";
-                }
-                dropZone.value = fullText;
-            } else { alert("Format non supporté."); }
-        } catch (err) { alert("Erreur de lecture."); }
-        hideLoader();
-    });
-
-    window.switchView = (id, event) => {
-        currentView = id;
-        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-        if(event) event.target.classList.add('active');
-        
-        const editor = document.getElementById("main-editor");
-        editor.value = data[id] || "";
-        document.getElementById("view-title").innerText = `ÉDITEUR : ${id.toUpperCase()}`;
-        updateWordCount();
-        
-        const storyboardContainer = document.getElementById("storyboard-container");
-        if(id === 'image') { renderStoryboard(data.image); } 
-        else { storyboardContainer.style.display = "none"; editor.style.display = "block"; }
-    };
-
-    window.updateWordCount = () => {
-        const text = document.getElementById("main-editor").value;
-        const count = text.trim() ? text.trim().split(/\s+/).length : 0;
-        document.getElementById("word-count").innerText = `${count} mots`;
-        data[currentView] = text; 
-    };
-
-    function renderStoryboard(text) {
-        const container = document.getElementById("storyboard-container");
-        container.innerHTML = "";
-        const regex = /\[PROMPT:(.*?)\]/g;
-        let match, found = false;
-        
-        while ((match = regex.exec(text)) !== null) {
-            found = true;
-            const prompt = encodeURIComponent(match[1].trim());
-            const url = `https://image.pollinations.ai/prompt/${prompt}?width=1280&height=720&nologo=true&seed=${Math.floor(Math.random()*1000)}`;
-            container.innerHTML += `<img loading="lazy" decoding="async" src="${url}" class="storyboard-img">`;
-        }
-        
-        if (found) { container.style.display = "grid"; document.getElementById("main-editor").style.display = "none"; } 
-        else { document.getElementById("main-editor").style.display = "block"; }
-    }
-
-    // --- EXPORT : PITCH DECK EN PDF STYLISÉ ---
-    window.exportPitchDeckPDF = () => {
-        if (!data.bible) return alert("Veuillez générer le projet d'abord !");
-        
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
-        
-        // Page de garde formelle
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(28);
-        doc.text("DOSSIER DE PRODUCTION", 105, 100, { align: "center" });
-        
-        doc.setFontSize(16);
-        doc.setFont("helvetica", "normal");
-        doc.text("PITCH DECK & BUDGET ESTIMATIF", 105, 120, { align: "center" });
-        
-        doc.setFontSize(12);
-        doc.setFont("helvetica", "italic");
-        doc.text("Préparé par : Niko", 105, 140, { align: "center" });
-        
-        let dateObj = new Date();
-        let month = dateObj.getUTCMonth() + 1;
-        let day = dateObj.getUTCDate();
-        let year = dateObj.getUTCFullYear();
-        doc.text(`Date : ${day}/${month}/${year}`, 105, 150, { align: "center" });
-
-        // Sections du document
-        const sections = [
-            { id: 'bible', title: '1. ANALYSE DRAMATIQUE & BIBLE' },
-            { id: 'budget', title: '2. TOP-SHEET BUDGETAIRE' },
-            { id: 'narratif', title: '3. SÉQUENCIER NARRATIF' },
-            { id: 'technique', title: '4. INTENTIONS DE RÉALISATION' },
-            { id: 'image', title: '5. DIRECTION DE LA PHOTOGRAPHIE' },
-            { id: 'audio', title: '6. DESIGN SONORE' },
-            { id: 'light', title: '7. ÉCLAIRAGE' }
-        ];
-
-        sections.forEach(sec => {
-            if (!data[sec.id]) return;
-            
-            doc.addPage();
-            let y = 30;
-            const margin = 20;
-            
-            // Titre de section
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(16);
-            doc.text(sec.title, margin, y);
-            y += 15;
-            
-            // Contenu
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(11);
-            
-            const lines = doc.splitTextToSize(data[sec.id], 170);
-            lines.forEach(line => {
-                // Ignore les instructions de prompt internes dans l'export final
-                if(line.includes("[PROMPT:")) return; 
-                
-                if (y > 270) { doc.addPage(); y = 30; }
-                doc.text(line, margin, y);
-                y += 6;
-            });
-        });
-
-        doc.save("Pitch_Deck_Niko.pdf");
-    };
-
-    // --- EXPORT SCÉNARIO : EN COURIER ---
-    window.exportScenarioPDF = () => {
-        if (!data.script) return alert("Le scénario n'est pas encore généré !");
-        
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
-        
-        doc.setFont("courier", "normal");
-        doc.setFontSize(12);
-        
-        const lines = data.script.split('\n');
-        let y = 20;
-        const margin = 20;
-        
-        doc.text("SCÉNARIO - FORMAT INDUSTRIE", 105, 15, { align: "center" });
-        y += 10;
-
-        lines.forEach(line => {
-            const text = line.trim();
-            if (text === "") { y += 6; return; }
-            if (y > 280) { doc.addPage(); y = 20; }
-
-            if (text.startsWith('INT') || text.startsWith('EXT') || text.startsWith('.')) {
-                doc.setFont("courier", "bold"); doc.text(text.toUpperCase(), margin, y);
-            } 
-            else if (text === text.toUpperCase() && text.length > 1 && !text.includes(' - ')) {
-                doc.setFont("courier", "bold"); doc.text(text, 105, y, { align: "center" });
-            } 
-            else if (line.startsWith('    ') || (text.length > 0 && text.length < 50 && line.startsWith(' '))) {
-                doc.setFont("courier", "normal");
-                const splitText = doc.splitTextToSize(text, 90);
-                doc.text(splitText, 60, y);
-                y += (splitText.length - 1) * 6;
-            } 
-            else {
-                doc.setFont("courier", "normal");
-                const splitText = doc.splitTextToSize(text, 170);
-                doc.text(splitText, margin, y);
-                y += (splitText.length - 1) * 6;
-            }
-            y += 6;
-        });
-
-        doc.save("Scenario_Pour_Production.pdf");
-    };
-
-    function updateLoader(mainText, subText = "") { 
-        document.getElementById("loader").style.display = "flex"; 
-        document.getElementById("loader-text").innerText = mainText; 
-        document.getElementById("loader-sub").innerText = subText;
-    }
-    function hideLoader() { document.getElementById("loader").style.display = "none"; }
-
-    document.getElementById("launchBtn").onclick = runProduction;
-</script>
-
-</main>
-
-<script>
-
-/* ── AbortController + Retry + Debounce — Studio Niko Design ── */
-const fetch = (() => {
-  let _ctrl = null;
-  return async function(url, opts={}, retries=3) {
-    if(_ctrl) _ctrl.abort();
-    _ctrl = new AbortController();
-    opts.signal = _ctrl.signal;
-    for(let i=0; i<retries; i++) {
-      try {
-        const r = await fetch(url, opts);
-        if(!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r;
-      } catch(e) {
-        if(e.name==='AbortError') throw e;
-        if(i===retries-1) throw e;
-        await new Promise(res=>setTimeout(res, 800*(i+1)));
-      }
-    }
-  };
-})();
-
-function nikoDebounce(fn, ms=400) {
-  let t; return (...a) => { clearTimeout(t); t=setTimeout(()=>fn(...a), ms); };
-}
-
-function nikoRetryBtn(container, fn) {
-  const btn = document.createElement('button');
-  btn.textContent = '↺ Réessayer';
-  btn.style.cssText='margin-top:8px;padding:6px 14px;background:rgba(0,255,157,.15);border:1px solid #00ff9d;color:#00ff9d;border-radius:4px;cursor:pointer;font-family:inherit;font-size:12px';
-  btn.onclick = () => { btn.remove(); fn(); };
-  if(container) container.appendChild(btn);
-}
-
-</script>
-<script>
-if('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    const swCode = `
-const CACHE='niko-v1';
-const ASSETS=['./','/index.html'];
-self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS))));
-self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));
-self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k))))));
-    `;
-    const blob = new Blob([swCode],{type:'text/javascript'});
-    const swURL = URL.createObjectURL(blob);
-    navigator.serviceWorker.register(swURL).catch(()=>{});
-  });
-}
-</script>
-
-<div id="nikoOffline" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9998;background:#ff4444;color:#fff;text-align:center;padding:8px;font-family:monospace;font-size:13px">
-  📡 Connexion perdue — mode hors-ligne activé
-</div>
-<script>
-window.addEventListener('offline',()=>document.getElementById('nikoOffline').style.display='block');
-window.addEventListener('online',()=>document.getElementById('nikoOffline').style.display='none');
-</script>
 </body>
 </html>
