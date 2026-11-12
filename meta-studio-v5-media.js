@@ -444,7 +444,7 @@ async function exportMovie(){
     const volumes={dialogue:Number($('vol-dialogue').value)/100,
       music:Number($('vol-music').value)/100,ambience:Number($('vol-ambience').value)/100};
     const result=await makeTimelineMovie({
-      clips:project.clips,results:state.results,volumes,width,
+      clips:JSON.parse(JSON.stringify(project.clips)),results:state.results,volumes,width,
       height:Math.round(width*9/16),fps:FPS,signal:controller.signal,
       onProgress:(percent,phase)=>{
         $('render-progress').value=percent;
@@ -454,6 +454,9 @@ async function exportMovie(){
     download(result.blob,'studio-niko-film-'+Date.now()+'.'+result.extension);
     log('Film monté : '+result.duration.toFixed(2)+' s, '+result.blob.size+' octets, '+result.extension,'success');
     notify('Film assemblé et téléchargement lancé.','success');
+  }catch(error){
+    $('render-state').textContent=error?.name==='AbortError'?'Rendu annulé.':'Échec du rendu : '+error.message;
+    throw error;
   }finally{
     movieController=null;$('render-stop').disabled=true;
   }
