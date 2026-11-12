@@ -1,5 +1,6 @@
 /* META-STUDIO PRO V5 — timeline, looks, local tools, audio & interchange */
 import { $, uid, state, addResult, log, notify, status, generate } from './meta-studio-v5-core.js';
+import { makeTimelineMovie, movieSupport } from './meta-studio-v5-render.js';
 const FPS=24;
 const $all=(q)=>Array.from(document.querySelectorAll(q));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -16,6 +17,7 @@ const TIME=()=>performance.now();
 const project={clips:{video:[],audio:[],overlay:[]},playhead:0,selected:null,playing:false,duration:60};
 let lastFrame=0,raf=0,visualId=null,mediaAudio=new Map();
 let processedCanvas=null;
+let movieController=null;
 const validTypes=['video','audio','overlay'];
 function allClips(){return validTypes.flatMap(k=>project.clips[k]);}
 function refreshDuration(){
@@ -429,12 +431,40 @@ async function exportZip(){
   download(blob,'meta-studio-v5.zip');
   if(failures.length)log(failures.length+' média(s) manquants dans le ZIP.','error');
 }
+async function exportMovie(){
+  if(movieController)throw new Error('Un rendu est déjà en cours.');
+  if(!movieSupport())throw new Error('Export vidéo non pris en charge par ce navigateur.');
+  pause();
+  const controller=new AbortController();movieController=controller;
+  $('render-stop').disabled=false;
+  $('render-progress').value=0;
+  $('render-state').textContent='Chargement des sources…';
+  try{
+    const width=Number($('render-resolution').value);
+    const volumes={dialogue:Number($('vol-dialogue').value)/100,
+      music:Number($('vol-music').value)/100,ambience:Number($('vol-ambience').value)/100};
+    const result=await makeTimelineMovie({
+      clips:project.clips,results:state.results,volumes,width,
+      height:Math.round(width*9/16),fps:FPS,signal:controller.signal,
+      onProgress:(percent,phase)=>{
+        $('render-progress').value=percent;
+        $('render-state').textContent=phase+' · '+percent+' %';
+      }
+    });
+    download(result.blob,'studio-niko-film-'+Date.now()+'.'+result.extension);
+    log('Film monté : '+result.duration.toFixed(2)+' s, '+result.blob.size+' octets, '+result.extension,'success');
+    notify('Film assemblé et téléchargement lancé.','success');
+  }finally{
+    movieController=null;$('render-stop').disabled=true;
+  }
+}
 async function doExport(){
   const mode=$('export-format').value,source=$('export-source').value;
   $('export-button').disabled=true;
   try{
     status('Préparation de l’export…');
-    if(mode==='project')downloadText(JSON.stringify(serializableProject(),null,2),'meta-studio-v5.json','application/json');
+    if(mode==='movie')await exportMovie();
+    else if(mode==='project')downloadText(JSON.stringify(serializableProject(),null,2),'meta-studio-v5.json','application/json');
     else if(mode==='edl')downloadText(EDL(),'meta-studio-v5.edl');
     else if(mode==='otio')downloadText(OTIO(),'meta-studio-v5.otio','application/json');
     else if(mode==='fcpxml')downloadText(FCPXML(),'meta-studio-v5.fcpxml','application/xml');
@@ -569,6 +599,9 @@ function init(){
   });
   $('agent-command').addEventListener('keydown',e=>{if(e.key==='Enter'){$('agent-send').click();}});
   $('export-button').addEventListener('click',doExport);
+  $('render-stop').addEventListener('click',()=>{
+    if(movieController){movieController.abort();$('render-state').textContent='Annulation du rendu…';}
+  });
   $('import-project').addEventListener('change',async e=>{
     try{await loadProject(e.target.files?.[0]);}catch(err){notify('Import : '+err.message,'error');}e.target.value='';
   });
