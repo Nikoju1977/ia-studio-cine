@@ -4,9 +4,10 @@ export const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.
 export const state = { results: [], busy: false, controller: null, onResult: null };
 export const CONFIG = {
   endpoint: 'https://apihub.agnes-ai.com',
-  text: 'agnes-2.0-flash',
-  image: 'agnes-image-2.1-flash',
-  video: 'agnes-video-v2.0',
+  text: 'agnes-2.5-flash',
+  image: 'agnes-image-2.5-flash',
+  video: 'agnes-video-2.5-flash',
+  videoPro: 'agnes-video-2.5',
   fps: 24
 };
 const keys = [];
@@ -100,8 +101,63 @@ async function getKey(signal) {
     await sleep(Math.max(150,ms),signal);
   }
 }
-async function request(path,{method='GET',body,signal,maxAttempts=5}={}){
-  for(let attempt=0;attempt<maxAttempts;attempt++){
+
+function providerError(response,data,isVideo){
+  const raw=data?.error;
+  const detail=String(typeof raw==='string'?raw:raw?.message||data?.message||'').slice(0,260);
+  const code=String(raw?.code||data?.code||'').slice(0,65);
+  const requestId=String(data?.request_id||data?.requestId||raw?.request_id||
+    detail.match(/request[\s_-]*id\s*:?\s*([a-zA-Z0-9_-]+)/i)?.[1]||'').slice(0,90);
+  const unavailable=/temporarily unavailable|model_not_found|model unavailable|discontinued/i.test(detail+' '+code);
+  const full=/queue.full|queue_full|queue is full/i.test(detail+' '+code);
+  let message;
+  if(isVideo&&full)message='File vidéo Agnes saturée. Aucune tâche acceptée ; réessayez plus tard sans multiplier les demandes.';
+  else if(isVideo&&unavailable)message='Modèle vidéo Agnes indisponible. La requête n’a pas produit de vidéo ; vérifiez le modèle ou réessayez plus tard.';
+  else if(response.status===429)message='Limite de requêtes Agnes atteinte (HTTP 429). Attendez avant une nouvelle génération.';
+  else if(isVideo&&[500,502,503,504,520].includes(response.status))
+    message='Le serveur vidéo Agnes est momentanément indisponible (HTTP '+response.status+'). Votre image reste dans la médiathèque. Réessayez plus tard.';
+  else if(response.status===401||response.status===403)message='Agnes refuse la clé ou l’accès au modèle (HTTP '+response.status+').';
+  else message='Agnes HTTP '+response.status+(detail?' : '+detail:'');
+  const e=new Error(message+(requestId?' · Référence support : '+requestId:''));
+  e.httpStatus=response.status;e.providerCode=code;e.requestId=requestId;
+  return e;
+}
+async function imageReference(url,signal){
+  if(/^https:/i.test(url))return url; // Public HTTPS image: provider fetches this URL
+  if(!/^blob:/i.test(url)&&!/^data:image\//i.test(url))
+    throw new Error('Image source non prise en charge ; importez une image locale.');
+  if(/^data:image\//i.test(url))return url;
+  const res=await fetch(url,{signal});
+  if(!res.ok)throw new Error('Image source locale inaccessible.');
+  const blob=await res.blob();
+  if(!blob.type.startsWith('image/'))throw new Error('Le fichier sélectionné n’est pas une image.');
+  if(blob.size>4500000)throw new Error('Image locale trop volumineuse (max. 4,5 Mo) ; réduisez-la avant génération.');
+  return await new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    const abort=()=>reader.abort();
+    signal?.addEventListener('abort',abort,{once:true});
+    reader.onload=()=>{signal?.removeEventListener('abort',abort);resolve(reader.result);};
+    reader.onerror=()=>{signal?.removeEventListener('abort',abort);reject(new Error('Lecture image impossible.'));};
+    reader.onabort=()=>{signal?.removeEventListener('abort',abort);reject(new DOMException('Annulé','AbortError'));};
+    reader.readAsDataURL(blob);
+  });
+}
+function updateVideoSources(){
+  const select=$('video-source');
+  if(!select)return;
+  const previous=select.value;
+  select.replaceChildren(new Option('Texte uniquement (sans image de départ)',''));
+  for(const r of state.results.filter(r=>r.type==='image')){
+    select.add(new Option('Animer : '+String(r.prompt).slice(0,46),r.id));
+  }
+  if([...select.options].some(o=>o.value===previous))select.value=previous;
+}
+
+async function request(path,{method='GET',body,signal,maxAttempts}={}){
+  // POST video creation is not idempotent. Do not auto-retry paid generation requests.
+  const isVideo=path==='/v1/videos';
+  const attempts=maxAttempts??(method==='GET'?4:1);
+  for(let attempt=0;attempt<attempts;attempt++){
     const key=await getKey(signal);
     let response;
     try{
@@ -111,39 +167,44 @@ async function request(path,{method='GET',body,signal,maxAttempts=5}={}){
       });
     }catch(err){
       if(err.name==='AbortError')throw err;
-      if(attempt===maxAttempts-1)throw new Error('Réseau indisponible ou CORS bloqué. '+err.message);
+      if(attempt===attempts-1)throw new Error('Réseau indisponible, CORS bloqué ou réponse perdue. Vérifiez les tâches dans Agnes avant une nouvelle génération. '+err.message);
       await sleep(800*(attempt+1),signal);continue;
     }
     if(response.status===429){
-      key.coolUntil=Date.now()+readRetryAfter(response.headers.get('Retry-After'))*1000;
-      showKeys();log('Limite 429 : respect de Retry-After.');continue;
+      const delay=readRetryAfter(response.headers.get('Retry-After'));
+      key.coolUntil=Date.now()+delay*1000;
+      showKeys();log('Limite 429 : pause '+delay+' s.');
+      if(method!=='GET'||attempt===attempts-1)
+        throw new Error('Limite Agnes HTTP 429 : réessayez dans environ '+delay+' s.');
+      continue;
     }
     if([401,403].includes(response.status)){
       key.dead=true;showKeys();
       if(keys.some(k=>!k.dead))continue;
       throw new Error('Authentification refusée par Agnes ('+response.status+').');
     }
-    if([500,502,503,504].includes(response.status) && attempt<maxAttempts-1){
-      await sleep(1200*(attempt+1),signal);continue;
+    if([500,502,503,504,520].includes(response.status) && method==='GET' && attempt<attempts-1){
+      status('Agnes indisponible : reprise de la consultation '+(attempt+2)+'/'+attempts+'…');
+      await sleep(Math.min(12000,1200*Math.pow(2,attempt)),signal);continue;
     }
     if(!response.ok){
-      let info='';try{const x=await response.json();info=String(x.error?.message||x.message||'').slice(0,200);}catch{}
-      throw new Error('Agnes HTTP '+response.status+(info?': '+info:''));
+      const data=await response.json().catch(()=>null);
+      throw providerError(response,data,isVideo);
     }
     const data=await response.json().catch(()=>{throw new Error('Réponse API invalide (JSON).');});
     return data;
   }
-  throw new Error('Nombre maximal de tentatives atteint. Respectez les quotas API.');
+  throw new Error('Échec après tentatives de consultation. Aucune relance de génération automatique.');
 }
 function videoId(data){
   const id=data.video_id||data.id||data.task_id;
   if(!id)throw new Error('Agnes ne fournit pas de video_id.');
   return id;
 }
-async function pollVideo(id,signal){
+async function pollVideo(id,model,signal){
   for(let attempt=0;attempt<90;attempt++){
     await sleep(Math.min(8000+attempt*900,20000),signal);
-    const params=new URLSearchParams({video_id:id,model_name:CONFIG.video});
+    const params=new URLSearchParams({video_id:id,model_name:model});
     const data=await request('/agnesapi?'+params.toString(),{signal});
     const state=String(data.status||'unknown').toLowerCase();
     const percent=Number(data.progress);
@@ -167,24 +228,37 @@ export async function generate(){
   $('generate-btn').disabled=true;$('stop-btn').disabled=false;
   const ratio=$('aspect').value;
   const dims={'16:9':[1024,576],'9:16':[576,1024],'1:1':[1024,1024]}[ratio]||[1024,576];
-  const frames=Number($('frames').value)||121;
+  const seconds=Number($('frames').value)||5;
+  const advice=$('provider-advice');
+  advice?.classList.add('hidden');
   try{
     if(mode==='image'){
       status('Image Agnes : génération en cours…');
       const res=await request('/v1/images/generations',{method:'POST',signal:controller.signal,body:{
-        model:CONFIG.image,prompt:prompt.slice(0,2000),n:1,size:'1K',ratio,width:dims[0],height:dims[1]}});
+        model:CONFIG.image,prompt:prompt.slice(0,2000),n:1,size:'1K',ratio}});
       const first=res.data?.[0];
       if(!first)throw new Error('Aucune image dans la réponse.');
       addResult({type:'image',url:first.url||(first.b64_json?'data:image/png;base64,'+first.b64_json:''),prompt});
       notify('Image ajoutée à la médiathèque.','success');
     }else if(mode==='video'){
-      status('Vidéo Agnes : création de la tâche…');
-      const res=await request('/v1/videos',{method:'POST',signal:controller.signal,body:{
-        model:CONFIG.video,prompt:prompt.slice(0,2000),width:dims[0],height:dims[1],
-        num_frames:frames,frame_rate:24}});
-      const id=videoId(res);log('Tâche vidéo acceptée (identifiant '+String(id).slice(0,40)+').');
-      const url=await pollVideo(id,controller.signal);
-      addResult({type:'video',url,prompt,duration:frames/24,mime:'video/mp4'});
+      const model=$('video-model').value;
+      if(![CONFIG.video,CONFIG.videoPro].includes(model))throw new Error('Modèle vidéo non autorisé.');
+      if(model===CONFIG.videoPro&&!$('video-paid-confirm').checked)
+        throw new Error('Confirmez explicitement la facturation potentielle avant d’utiliser Agnes Video 2.5.');
+      const body={model,prompt:prompt.slice(0,2000),mode:'text',seconds:String(seconds),
+        size:'720P',aspect_ratio:ratio,n:1};
+      const sourceId=$('video-source').value;
+      if(sourceId){
+        const source=state.results.find(r=>r.id===sourceId&&r.type==='image');
+        if(!source)throw new Error('Image de départ absente de la médiathèque.');
+        status('Préparation de l’image de départ…');
+        body.mode='keyframe';body.first_frame=await imageReference(source.url,controller.signal);
+      }
+      status('Vidéo Agnes 2.5 : envoi d’une tâche'+(sourceId?' à partir d’une image':'')+'…');
+      const res=await request('/v1/videos',{method:'POST',signal:controller.signal,body});
+      const id=videoId(res);log('Tâche vidéo acceptée · modèle '+model+' · id '+String(id).slice(0,40));
+      const url=await pollVideo(id,model,controller.signal);
+      addResult({type:'video',url,prompt,duration:seconds,mime:'video/mp4'});
       notify('Vidéo disponible dans la médiathèque.','success');
     }else{
       status('Agnes : réponse texte…');
@@ -196,8 +270,14 @@ export async function generate(){
       notify('Réponse texte reçue.','success');
     }
   }catch(err){
-    if(err.name==='AbortError')notify('Opération interrompue localement. Une tâche vidéo déjà acceptée peut continuer côté Agnes.','error');
-    else notify(err.message,'error');
+    if(err.name==='AbortError')notify('Opération interrompue localement. Une tâche déjà acceptée peut continuer côté Agnes.','error');
+    else{
+      notify(err.message,'error');
+      if(mode==='video'&&advice){
+        advice.classList.remove('hidden');
+        advice.textContent='Vidéo non disponible. Le prompt et les images importées sont conservés. Vérifiez la file Agnes, puis relancez manuellement seulement si aucune tâche n’a été acceptée.';
+      }
+    }
   }finally{
     state.busy=false;state.controller=null;$('generate-btn').disabled=false;$('stop-btn').disabled=true;
   }
@@ -208,6 +288,8 @@ function prepare(){
     document.querySelectorAll('[data-view]').forEach(n=>n.setAttribute('aria-selected',String(n===button)));
     document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id==='view-'+name));
     location.hash=name;
+    if(window.matchMedia('(max-width:1000px)').matches)
+      button.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'});
   }));
   const initial=location.hash.replace('#','');
   if(initial && document.querySelector('[data-view="'+initial+'"]'))document.querySelector('[data-view="'+initial+'"]').click();
@@ -228,6 +310,12 @@ function prepare(){
     const mode=$('generation-mode').value;
     $('video-controls').classList.toggle('hidden',mode!=='video');
     $('chat-answer-box').classList.add('hidden');
+  });
+  document.addEventListener('studio:result',updateVideoSources);
+  updateVideoSources();
+  $('video-model').addEventListener('change',()=>{
+    $('video-paid-label').classList.toggle('hidden',$('video-model').value!==CONFIG.videoPro);
+    $('video-paid-confirm').checked=false;
   });
   $('import-media').addEventListener('change',async e=>{
     for(const file of e.target.files){
@@ -251,7 +339,7 @@ function prepare(){
     const dot=document.createElement('i');dot.className='light';b.append(dot,document.createTextNode(name));
     caps.append(b);
   });
-  showKeys();status('Prêt — importez des rushes ou configurez Agnes.','ok');log('META-STUDIO PRO V5 initialisé. Aucune clé conservée sur disque.','success');
+  showKeys();status('Prêt — importez des rushes ou configurez Agnes.','ok');log('META-STUDIO PRO V5.2 initialisé. Aucune clé conservée sur disque.','success');
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',prepare);
 else prepare();
