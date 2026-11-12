@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#090b11">
-<meta name="description" content="META-STUDIO PRO V5 — atelier de création cinéma, Agnes AI, montage, couleur et audio dans le navigateur.">
+<meta name="description" content="META-STUDIO PRO V5.2 — atelier de création cinéma, Agnes AI, montage, couleur et audio dans le navigateur.">
 <title>META-STUDIO PRO V5 — Atelier Cinéma</title>
 <link rel="stylesheet" href="./meta-studio-v5.css">
 <script type="module" src="./meta-studio-v5-media.js"></script>
@@ -24,7 +24,7 @@
   <button type="button" data-view="audio" aria-selected="false">♫ Audio</button>
   <button type="button" data-view="agent" aria-selected="false">⌘ Agent local</button>
   <button type="button" data-view="export" aria-selected="false">↥ Exports</button>
-  <div class="nav-foot">V5.1<br>Local-first · Sans clé embarquée<br>24 i/s · Design cinéma</div>
+  <div class="nav-foot">V5.2<br>Local-first · Sans clé embarquée<br>24 i/s · Design cinéma</div>
 </nav>
 <main class="workspace">
 
@@ -34,16 +34,26 @@
     <div class="panel">
       <div class="panel-title">Direction artistique</div>
       <label class="form-label" for="generation-mode">Production</label>
-      <select id="generation-mode"><option value="video">Vidéo — Agnes v2.0</option><option value="image">Image — Agnes Image 2.1</option><option value="chat">Assistant texte — Agnes 2.0</option></select>
+      <select id="generation-mode"><option value="video">Vidéo — Agnes Video 2.5</option><option value="image">Image — Agnes Image 2.5</option><option value="chat">Assistant texte — Agnes 2.5</option></select>
       <label class="form-label" for="prompt">Prompt / intention du plan</label>
       <textarea id="prompt" rows="7" placeholder="Exemple : Plan large à l'aube, brume légère dans une forêt de Bretagne, caméra travelling lent, texture argentique 35 mm, lumière naturelle…" maxlength="2000"></textarea>
       <div class="row">
-        <div class="field"><label class="form-label" for="aspect">Cadre</label><select id="aspect"><option value="16:9">16:9 · 1024×576</option><option value="9:16">9:16 · 576×1024</option><option value="1:1">1:1 · 1024×1024</option></select></div>
-        <div class="field" id="video-controls"><label class="form-label" for="frames">Durée vidéo</label><select id="frames"><option value="121">121 images · 5,04 s</option><option value="161">161 images · 6,71 s</option><option value="241">241 images · 10,04 s</option></select></div>
+        <div class="field"><label class="form-label" for="aspect">Cadre</label><select id="aspect"><option value="16:9">16:9 · horizontal</option><option value="9:16">9:16 · vertical</option><option value="1:1">1:1 · carré</option></select></div>
+      </div>
+      <div id="video-controls" class="video-controls">
+        <div class="row">
+          <div class="field"><label class="form-label" for="frames">Durée vidéo</label><select id="frames"><option value="4">4 secondes</option><option value="5" selected>5 secondes</option><option value="8">8 secondes</option><option value="12">12 secondes</option></select></div>
+          <div class="field"><label class="form-label" for="video-model">Moteur Agnes</label><select id="video-model"><option value="agnes-video-2.5-flash">Video 2.5 Flash · 720p</option><option value="agnes-video-2.5">Video 2.5 · facturation possible</option></select></div>
+        </div>
+        <label class="form-label" for="video-source">Image de départ (facultative)</label>
+        <select id="video-source"><option value="">Texte uniquement (sans image de départ)</option></select>
+        <p class="info">Choisir une image l'envoie au service Agnes lors de la génération. Le texte seul ne transmet aucune image.</p>
+        <label id="video-paid-label" class="video-paid hidden"><input id="video-paid-confirm" type="checkbox"> J'accepte de lancer une génération pouvant être facturée par Agnes. Je vérifierai mon tarif et mes crédits avant de continuer.</label>
       </div>
       <div class="actions"><button class="btn primary" id="generate-btn">▶ Générer</button><button class="btn danger" id="stop-btn" disabled>■ Stop local</button></div>
+      <div id="provider-advice" class="provider-advice hidden" role="alert" aria-live="polite"></div>
       <div id="chat-answer-box" class="panel hidden" style="margin-top:14px"><div class="panel-title">Réponse Agnes</div><p id="chat-answer" style="white-space:pre-wrap;overflow-wrap:anywhere"></p></div>
-      <p class="info">La génération nécessite une clé Agnes et un navigateur autorisé à contacter l’API (CORS). Arrêter une tâche ne garantit pas son annulation chez le fournisseur.</p>
+      <p class="info">La génération nécessite une clé Agnes, une API autorisant le navigateur (CORS) et de la capacité côté serveur. Si Agnes est saturé, aucune vidéo fictive ne sera ajoutée. Une tâche acceptée peut continuer après un arrêt local.</p>
     </div>
     <div class="grid">
       <div class="panel">
@@ -211,7 +221,7 @@
 
 <div id="global-status" role="status" class="status-line">Initialisation…</div>
 </main></div>
-<footer class="footer">META-STUDIO PRO V5 · Studio Niko Design · Outil créatif local-first · © 2026</footer>
+<footer class="footer">META-STUDIO PRO V5.2 · Studio Niko Design · Outil créatif local-first · © 2026</footer>
 </div>
 <!-- STUDIO NIKO — MODE D'EMPLOI INTÉGRÉ. Conserver ce bloc lors d'une mise à jour. -->
 <style id="studio-niko-guide-style">
@@ -247,7 +257,7 @@
     <ol><li>Importez vos images, vidéos ou sons dans la médiathèque.</li><li>Ajoutez les éléments à la timeline et ajustez les pistes et looks disponibles.</li><li>Exportez le film assemblé dans Exports (WebM ou MP4 selon le navigateur), ou exportez sa structure en JSON/EDL/OTIO/FCPXML.</li></ol>
     <h3>Avant de commencer</h3>
     <p>Prévoyez de l&#39;espace mémoire et vérifiez l&#39;état de votre projet avant fermeture.</p>
-    <div class="sn-guide-warning" role="note">Le rendu vidéo est en temps réel et peut échouer sur mobile, sur un codec non reconnu ou une source distante sans CORS. MP4 n&#39;est pas garanti. Agnes nécessite une clé et peut être bloqué par CORS.</div>
+    <div class="sn-guide-warning" role="note">Agnes Video 2.5 peut être indisponible (HTTP 500 / file saturée). La création n'est pas relancée automatiquement pour éviter les doublons. Choisissez une image importée comme première image si nécessaire. Le rendu film local reste indépendant d'Agnes.</div>
     <h3>En cas de problème</h3>
     <p>En cas de page vide ou d&#39;erreur : rechargez une fois, vérifiez la connexion et les permissions ; sur une PWA déjà installée, fermez-la puis rouvrez-la pour actualiser son cache. Consultez le dépôt GitHub si le problème persiste.</p>
     <div class="sn-guide-links">
