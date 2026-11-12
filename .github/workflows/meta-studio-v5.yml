@@ -22,5 +22,8 @@ jobs:
         run: |
           node --check meta-studio-v5-core.js
           node --check meta-studio-v5-media.js
+          node --check meta-studio-v5-render.js
       - name: Validate HTML / JS contracts
         run: node verify-v5.mjs
+      - name: Validate timeline render data model
+        run: node test-render-v5.mjs
