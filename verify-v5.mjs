@@ -26,5 +26,11 @@ for(const tab of ['studio','timeline','looks','neural','audio','agent','export']
 }
 assert.doesNotMatch(core,/localStorage|sessionStorage/,'API keys must stay in memory');
 assert.match(core,/Retry-After/);
+assert.match(core,/agnes-video-2\.5-flash/);
+assert.doesNotMatch(core,/agnes-video-v2\.0/);
+assert.match(core,/first_frame/);
+assert.match(core,/method==='GET'\?4:1/);
+for(const id of ['video-model','video-source','video-paid-confirm','video-paid-label','provider-advice'])
+  assert.ok(ids.includes(id),'Missing Agnes 2.5 control '+id);
 assert.match(media,/Les URL blob: locales expirent/);
 console.log('META-STUDIO V5: HTML IDs, dependencies, privacy checks OK');
