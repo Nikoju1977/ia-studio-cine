@@ -24,7 +24,7 @@
   <button type="button" data-view="audio" aria-selected="false">♫ Audio</button>
   <button type="button" data-view="agent" aria-selected="false">⌘ Agent local</button>
   <button type="button" data-view="export" aria-selected="false">↥ Exports</button>
-  <div class="nav-foot">V5.0<br>Local-first · Sans clé embarquée<br>24 i/s · Design cinéma</div>
+  <div class="nav-foot">V5.1<br>Local-first · Sans clé embarquée<br>24 i/s · Design cinéma</div>
 </nav>
 <main class="workspace">
 
@@ -184,10 +184,17 @@
   <div class="panel">
    <div class="panel-title">Exporter</div>
    <label class="form-label" for="export-format">Format</label>
-   <select id="export-format"><option value="media">Fichier média original (sans transcodage)</option><option value="zip">Archive ZIP · médias disponibles + projet</option><option value="project">Projet META-STUDIO V5 · JSON</option><option value="edl">CMX 3600 · EDL</option><option value="otio">OpenTimelineIO · JSON</option><option value="fcpxml">Final Cut Pro · FCPXML (références média)</option></select>
+   <select id="export-format"><option value="media">Fichier média original (sans transcodage)</option><option value="movie">Film monté · WebM/MP4 selon navigateur</option><option value="zip">Archive ZIP · médias disponibles + projet</option><option value="project">Projet META-STUDIO V5 · JSON</option><option value="edl">CMX 3600 · EDL</option><option value="otio">OpenTimelineIO · JSON</option><option value="fcpxml">Final Cut Pro · FCPXML (références média)</option></select>
    <label class="form-label" for="export-source">Source (média original)</label><select id="export-source"><option value="last">Dernier média</option><option value="first">Premier média</option><option value="all">Tous les médias (ZIP)</option></select>
-   <button id="export-button" class="btn primary" style="width:100%;margin-top:17px">↓ Exporter</button>
-   <p class="info">Le fichier source conserve son format d’origine. Pas d’encodage WebCodecs/MP4 du montage, pas de mixage rendu, pas d’export ProRes. Les URL temporaires doivent rester accessibles.</p>
+   <label class="form-label" for="render-resolution">Résolution du film assemblé</label>
+    <select id="render-resolution"><option value="1280">HD 1280 × 720 · 24 i/s</option><option value="1920">Full HD 1920 × 1080 · 24 i/s</option></select>
+    <button id="export-button" class="btn primary" style="width:100%;margin-top:17px">↓ Exporter</button>
+    <div class="row" style="margin-top:10px;align-items:center">
+      <progress id="render-progress" max="100" value="0" style="flex:1;min-width:0" aria-label="Progression du rendu"></progress>
+      <button id="render-stop" class="btn small danger" type="button" disabled>Annuler le rendu</button>
+    </div>
+    <p id="render-state" class="info" aria-live="polite">Le rendu s’effectue en temps réel sur l’appareil et peut être long.</p>
+   <p class="info">Le film monté assemble réellement les médias, titres et sons des pistes dans le navigateur. Format WebM ou MP4 selon navigateur. Rendu en temps réel, non garanti image par image ; ni ProRes, ni ACES, ni mastering broadcast. Les médias externes nécessitent CORS.</p>
   </div>
   <div class="panel">
    <div class="panel-title">Reprendre un projet</div>
@@ -237,10 +244,10 @@
     <h2 id="studio-niko-guide-title">ia-studio-cine</h2>
     <p>META-STUDIO PRO V5 : création audiovisuelle, timeline, looks et exports.</p>
     <h3>Premiers pas</h3>
-    <ol><li>Importez vos images, vidéos ou sons dans la médiathèque.</li><li>Ajoutez les éléments à la timeline et ajustez les pistes et looks disponibles.</li><li>Exportez le projet (JSON/EDL/OTIO/FCPXML) ; la timeline n&#39;est pas encodée en MP4 final.</li></ol>
+    <ol><li>Importez vos images, vidéos ou sons dans la médiathèque.</li><li>Ajoutez les éléments à la timeline et ajustez les pistes et looks disponibles.</li><li>Exportez le film assemblé dans Exports (WebM ou MP4 selon le navigateur), ou exportez sa structure en JSON/EDL/OTIO/FCPXML.</li></ol>
     <h3>Avant de commencer</h3>
     <p>Prévoyez de l&#39;espace mémoire et vérifiez l&#39;état de votre projet avant fermeture.</p>
-    <div class="sn-guide-warning" role="note">Pas d&#39;export MP4 assemblé à partir de la timeline. Certains appels Agnes nécessitent une clé et peuvent être bloqués par CORS.</div>
+    <div class="sn-guide-warning" role="note">Le rendu vidéo est en temps réel et peut échouer sur mobile, sur un codec non reconnu ou une source distante sans CORS. MP4 n&#39;est pas garanti. Agnes nécessite une clé et peut être bloqué par CORS.</div>
     <h3>En cas de problème</h3>
     <p>En cas de page vide ou d&#39;erreur : rechargez une fois, vérifiez la connexion et les permissions ; sur une PWA déjà installée, fermez-la puis rouvrez-la pour actualiser son cache. Consultez le dépôt GitHub si le problème persiste.</p>
     <div class="sn-guide-links">
