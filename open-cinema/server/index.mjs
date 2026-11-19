@@ -1,0 +1,151 @@
+import http from 'node:http';
+import {randomUUID, randomBytes, timingSafeEqual, createHash} from 'node:crypto';
+import {readFile,writeFile,mkdir,stat,open,readdir} from 'node:fs/promises';
+import {createReadStream} from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {makeStoryboard,validateStoryboard,proceduralFrame,buildShot,concatShots,masterAudio,inspectMedia,verifyMaster,runProcess} from './engine.mjs';
+import {comfyStatus,generateComfy} from './comfy.mjs';
+
+const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const WEB=path.join(ROOT,'web');
+const DATA=path.resolve(process.env.STUDIO_DATA_DIR||path.join(ROOT,'data'));
+const ASSETS=path.join(DATA,'assets');
+const JOBDIR=path.join(DATA,'jobs');
+const WORKFLOWS=path.join(ROOT,'workflows');
+const HOST=process.env.STUDIO_HOST||'127.0.0.1';
+const PORT=Number(process.env.PORT||8787);
+const PASSWORD=process.env.STUDIO_TOKEN||'';
+const jobs=new Map();
+const sessions=new Set();
+const MAX_UPLOAD=250*1024*1024;
+const MIME={'.html':'text/html','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.json':'application/json','.webmanifest':'application/manifest+json','.ico':'image/x-icon','.mp4':'video/mp4','.webm':'video/webm','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.wav':'audio/wav','.mp3':'audio/mpeg','.ogg':'audio/ogg'};
+const error=(code,message)=>Object.assign(new Error(message),{status:code});
+const json=(res,code,data)=>{res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data));};
+function localRequest(req){return ['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress);}
+function checkOrigin(req){if(!['POST','PUT','DELETE'].includes(req.method))return;const origin=req.headers.origin;if(origin&&new URL(origin).host!==req.headers.host)throw error(403,'Origine refusée');}
+function authorized(req){
+  if(!PASSWORD&&localRequest(req))return true;
+  const cookie=(req.headers.cookie||'').split(';').map(s=>s.trim()).find(x=>x.startsWith('studio_session='))?.slice(15)||'';
+  return sessions.has(cookie);
+}
+function constantEqual(a,b){const x=Buffer.from(a),y=Buffer.from(b);return x.length===y.length&&timingSafeEqual(x,y);}
+async function readBody(req,limit=256*1024){
+  const buffers=[];let size=0;
+  for await(const part of req){size+=part.length;if(size>limit)throw error(413,'Requête trop volumineuse');buffers.push(part);}
+  return Buffer.concat(buffers);
+}
+async function bodyJSON(req){try{return JSON.parse((await readBody(req)).toString('utf8'));}catch(e){if(e.status)throw e;throw error(400,'JSON invalide');}}
+async function serveFile(req,res,file,type){
+  const s=await stat(file).catch(()=>null);
+  if(!s?.isFile())throw error(404,'Fichier introuvable');
+  const headers={'Content-Type':type||MIME[path.extname(file).toLowerCase()]||'application/octet-stream','X-Content-Type-Options':'nosniff','Cache-Control':'no-store','Accept-Ranges':'bytes'};
+  const range=req.headers.range;
+  if(range){
+    const match=/^bytes=(\d*)-(\d*)$/.exec(range);
+    if(!match)throw error(416,'Plage invalide');
+    const start=match[1]?Number(match[1]):0;const end=match[2]?Number(match[2]):s.size-1;
+    if(start>end||end>=s.size||start<0)throw error(416,'Plage invalide');
+    res.writeHead(206,{...headers,'Content-Range':`bytes ${start}-${end}/${s.size}`,'Content-Length':end-start+1});
+    createReadStream(file,{start,end}).pipe(res);return;
+  }
+  res.writeHead(200,{...headers,'Content-Length':s.size});createReadStream(file).pipe(res);
+}
+function safeWebPath(p){const rel=p==='/'?'index.html':decodeURIComponent(p.slice(1));const candidate=path.resolve(WEB,rel);if(candidate!==WEB&&!candidate.startsWith(WEB+path.sep))throw error(403,'Chemin interdit');return candidate;}
+const jobPublic=j=>({id:j.id,status:j.status,step:j.step,progress:j.progress,error:j.error||null,createdAt:j.createdAt,storyboard:j.storyboard,qa:j.qa||null,master:j.master?'/api/jobs/'+j.id+'/master':null,shots:j.shots||[]});
+async function runJob(job,signal){
+  const folder=path.join(JOBDIR,job.id);await mkdir(folder,{recursive:true});
+  const shots=[];
+  const board=job.storyboard;
+  try{
+    job.status='running';job.progress=1;
+    for(let i=0;i<board.shots.length;i++){
+      const shot=board.shots[i];
+      if(signal.aborted)throw new DOMException('Annulé','AbortError');
+      job.step=`Plan ${i+1}/${board.shots.length} · préparation`;
+      job.progress=Math.round(3+i/board.shots.length*75);
+      const base=path.join(folder,`source-${String(i+1).padStart(2,'0')}`);
+      let source,kind='image';
+      if(board.engine==='procedural'){
+        source=base+'.png';await proceduralFrame(source,shot,board.aspect,board.grade);
+      }else{
+        job.step=`Plan ${i+1}/${board.shots.length} · GPU ComfyUI`;
+        const generated=await generateComfy({mode:board.engine,shot,aspect:board.aspect,output:base,signal,workflowRoot:WORKFLOWS,onProgress:message=>{job.step=message;}});
+        source=generated.file;kind=generated.kind;
+      }
+      const dest=path.join(folder,`shot-${String(i+1).padStart(2,'0')}.mp4`);
+      job.step=`Plan ${i+1}/${board.shots.length} · encodage 4K`;
+      const info=await buildShot({source,out:dest,shot,aspect:board.aspect,grade:board.grade,signal,preset:process.env.FFMPEG_PRESET||'medium',kind});
+      shots.push(dest);
+      job.shots.push({index:i+1,title:shot.title,kind,prompt:shot.prompt,dimensions:info.streams?.find(s=>s.codec_type==='video')?.width+'×'+info.streams?.find(s=>s.codec_type==='video')?.height});
+      await writeFile(path.join(folder,'progress.json'),JSON.stringify(jobPublic(job),null,2));
+    }
+    job.step='Montage et conform 4K';job.progress=83;
+    const stitched=path.join(folder,'assembly.mp4');
+    await concatShots(shots,stitched,signal);
+    const sound=board.soundtrackId?await findAsset(board.soundtrackId):null;
+    job.step='Mixage, normalisation et master AAC 48 kHz';job.progress=91;
+    const master=path.join(folder,'master.mp4');
+    const info=await masterAudio({video:stitched,out:master,soundtrack:sound,signal});
+    job.qa=verifyMaster(info,board.aspect);
+    if(!job.qa.pass)throw new Error('Contrôle qualité master échoué : '+JSON.stringify(job.qa.checks));
+    job.master=master;job.progress=100;job.status='completed';job.step='Master 4K vérifié par FFprobe';
+  }catch(err){job.status=signal.aborted?'cancelled':'failed';job.step=job.status==='cancelled'?'Rendu arrêté':'Erreur de production';job.error=String(err.message||err).slice(0,900);}
+  finally{await writeFile(path.join(folder,'progress.json'),JSON.stringify(jobPublic(job),null,2)).catch(()=>{});job.controller=null;}
+}
+async function findAsset(id){if(!/^[0-9a-f-]{36}$/.test(id))throw error(400,'ID fichier invalide'); const list=await readdir(ASSETS);const match=list.find(n=>n.startsWith(id+'.'));if(!match)throw error(404,'Média introuvable');return path.join(ASSETS,match);}
+async function upload(req,res){
+  const length=Number(req.headers['content-length']);if(!Number.isSafeInteger(length)||length<1||length>MAX_UPLOAD)throw error(413,'Fichier trop volumineux ou taille absente (250 Mo max)');
+  const name=String(req.headers['x-filename']||'media.bin');const ext=path.extname(name).toLowerCase();
+  if(!['.mp3','.wav','.ogg','.m4a','.mp4','.webm','.mov','.png','.jpeg','.jpg','.webp'].includes(ext))throw error(415,'Extension non autorisée');
+  const buffer=await readBody(req,MAX_UPLOAD);if(buffer.length!==length)throw error(400,'Transfert incomplet');
+  const id=randomUUID();await writeFile(path.join(ASSETS,id+ext),buffer,{flag:'wx'});
+  json(res,201,{id,name:name.slice(0,120),bytes:buffer.length,url:'/api/assets/'+id});
+}
+async function route(req,res){
+  checkOrigin(req);const url=new URL(req.url,'http://localhost');const pathName=url.pathname;
+  if(pathName==='/api/health'&&req.method==='GET'){
+    const ffmpeg=await new Promise(resolve=>{runProcess('ffmpeg',['-version'],{timeoutMs:4000}).then(()=>resolve(true),()=>resolve(false));});
+    const comfy=await comfyStatus();
+    return json(res,200,{app:'Studio Niko Open Cinema',version:'0.1.0',ffmpeg,comfy:comfy.available,workflows:'export API requis',resolution:'4K',authentication:!!PASSWORD,authorized:authorized(req)});
+  }
+  if(pathName==='/api/session'&&req.method==='POST'){
+    if(!PASSWORD&&!localRequest(req))throw error(403,'Définissez STUDIO_TOKEN pour l’accès depuis un autre appareil');
+    const b=await bodyJSON(req);
+    if(PASSWORD&&!constantEqual(String(b.token||''),PASSWORD))throw error(401,'Code de connexion incorrect');
+    const sid=randomBytes(32).toString('hex');sessions.add(sid);
+    res.setHeader('Set-Cookie','studio_session='+sid+'; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200'+(req.socket.encrypted?'; Secure':''));
+    return json(res,200,{ok:true});
+  }
+  if(pathName.startsWith('/api/')&&!authorized(req))throw error(401,'Connexion requise : configurez le code du serveur');
+  if(pathName==='/api/plan'&&req.method==='POST'){return json(res,200,makeStoryboard(await bodyJSON(req)));}
+  if(pathName==='/api/upload'&&req.method==='POST')return upload(req,res);
+  const asset=/^\/api\/assets\/([a-f0-9-]{36})$/.exec(pathName);
+  if(asset&&req.method==='GET')return serveFile(req,res,await findAsset(asset[1]));
+  if(pathName==='/api/jobs'&&req.method==='POST'){
+    if([...jobs.values()].some(j=>j.status==='running'||j.status==='queued'))throw error(409,'Un rendu est déjà en cours. Un seul job simultané pour préserver le GPU.');
+    const b=await bodyJSON(req);
+    const board=validateStoryboard(b.storyboard||b);
+    if(board.engine!=='procedural'&&!process.env.COMFY_URL)throw error(409,'COMFY_URL non configuré : génération IA locale impossible.');
+    if(board.soundtrackId)await findAsset(board.soundtrackId);
+    const id=randomUUID();const controller=new AbortController();
+    const job={id,status:'queued',step:'Préparation',progress:0,error:null,createdAt:new Date().toISOString(),storyboard:board,shots:[],controller};
+    jobs.set(id,job);void runJob(job,controller.signal);
+    return json(res,202,jobPublic(job));
+  }
+  const byId=/^\/api\/jobs\/([a-f0-9-]{36})(?:\/(master|cancel))?$/.exec(pathName);
+  if(byId){const job=jobs.get(byId[1]);if(!job)throw error(404,'Job inconnu (les jobs en cours ne survivent pas au redémarrage)');
+    if(!byId[2]&&req.method==='GET')return json(res,200,jobPublic(job));
+    if(byId[2]==='cancel'&&req.method==='POST'){if(job.controller)job.controller.abort();return json(res,200,{ok:true,status:job.status});}
+    if(byId[2]==='master'&&req.method==='GET'){if(job.status!=='completed'||!job.master)throw error(409,'Master non terminé');return serveFile(req,res,job.master,'video/mp4');}
+  }
+  if(pathName.startsWith('/api/'))throw error(404,'API inconnue');
+  if(req.method!=='GET'&&req.method!=='HEAD')throw error(405,'Méthode interdite');
+  const file=safeWebPath(pathName);
+  if(!Object.hasOwn(MIME,path.extname(file).toLowerCase()))throw error(403,'Type de fichier non servi');
+  return serveFile(req,res,file);
+}
+await Promise.all([mkdir(ASSETS,{recursive:true}),mkdir(JOBDIR,{recursive:true})]);
+if(HOST!=='127.0.0.1'&&HOST!=='localhost'&&!PASSWORD)throw Error('STUDIO_TOKEN est obligatoire pour exposer le serveur sur le réseau (STUDIO_HOST=0.0.0.0).');
+const server=http.createServer((req,res)=>{route(req,res).catch(err=>json(res,err.status||500,{error:err.status?err.message:'Erreur serveur : '+err.message}));});
+server.listen(PORT,HOST,()=>console.log(`STUDIO NIKO · http://${HOST}:${PORT} · 4K master · ${PASSWORD?'authentification activée':'local uniquement'}`));
