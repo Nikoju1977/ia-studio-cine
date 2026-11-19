@@ -1,0 +1,27 @@
+name: Open Cinema Engine / Node + 4K pipeline checks
+on:
+  push:
+    paths:
+      - "open-cinema/**"
+      - ".github/workflows/open-cinema-ci.yml"
+  pull_request:
+    paths:
+      - "open-cinema/**"
+      - ".github/workflows/open-cinema-ci.yml"
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: open-cinema
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Static syntax
+        run: npm run check
+      - name: Unit tests
+        run: npm test
+      - name: FFmpeg version
+        run: ffmpeg -version
