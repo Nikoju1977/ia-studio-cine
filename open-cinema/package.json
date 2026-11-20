@@ -1,6 +1,6 @@
 {
   "name": "studio-niko-open-cinema-ai",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Mobile-first open cinema director with local ComfyUI and verified FFmpeg 4K delivery",
