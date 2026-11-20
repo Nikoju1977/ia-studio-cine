@@ -328,7 +328,7 @@ async function generativePlan(){
   const engine=$('genMode').value;
   const assets=chosenMedia();const visual=assets.filter(m=>m.type==='image'||m.type==='video');
   if(engine==='imported'&&!visual.length)throw Error('Sélectionne au moins une image ou vidéo à assembler.');
-  if(engine.startsWith('comfy-')&&assets.length&&assets.filter(m=>m.type==='image').length!==1)
+  if(engine.startsWith('comfy-')&&assets.filter(m=>m.type==='image').length>1)
     throw Error('Pour une génération IA guidée, sélectionne une seule image de référence (ou aucune).');
   if(engine.startsWith('comfy-')&&assets.some(m=>m.type==='video'))throw Error('La génération IA guidée accepte une image, pas un rush vidéo ; utilise AI VFX pour modifier un film.');
   const count=engine==='imported'?visual.length:Number($('genCount').value);
