@@ -33,9 +33,9 @@ export default async function handler(req,res){
     let data;try{data=JSON.parse(raw);}catch{return res.status(502).json({error:'Réponse Agnes non conforme.'});}
     if(!upstream.ok){
       const detail=String(data?.error?.message||data?.message||data?.error||'Erreur fournisseur').slice(0,220);
-      const queue=/(queue[\\s_-]*(?:is[\\s_-]*)?full|file.*satur|saturat)/i.test(detail);
+      const queue=/(queue[\s_-]*(?:is[\s_-]*)?full|file.*satur|saturat)/i.test(detail);
       const requestId=String(data?.request_id||data?.requestId||data?.error?.request_id||
-        detail.match(/request[\\s_-]*id[\\s:=-]*([a-zA-Z0-9_-]+)/i)?.[1]||'').slice(0,90);
+        detail.match(/request[\s_-]*id[\s:=-]*([a-zA-Z0-9_-]+)/i)?.[1]||'').slice(0,90);
       return res.status(upstream.status).json({
         error:queue?'Agnes vidéo saturé : aucune tâche acceptée. Continue ton storyboard ou ton montage, puis réessaie manuellement quand le service est disponible.':`Agnes HTTP ${upstream.status} : ${detail}`,
         code:queue?'AGNES_VIDEO_QUEUE_FULL':'AGNES_PROVIDER_ERROR',
