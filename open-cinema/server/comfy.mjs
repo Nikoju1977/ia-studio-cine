@@ -57,17 +57,20 @@ export async function generateComfy({mode,shot,aspect,output,signal,onProgress,w
   try{raw=JSON.parse(await readFile(file,'utf8'));}
   catch{throw new Error('Workflow ComfyUI manquant : '+file+'. Exportez un workflow API compatible avec votre modèle.');}
   let inputFile=null;
-  if(vfx){
+  if(vfx||sourceFile){
     if(!sourceFile)throw Error('Aucun rush vidéo source fourni.');
     const serialized=JSON.stringify(raw);
-    if(!serialized.includes('{{INPUT_FILE}}')&&!serialized.includes('{{SOURCE_VIDEO}}'))
+    if(vfx&&!serialized.includes('{{INPUT_FILE}}')&&!serialized.includes('{{SOURCE_VIDEO}}'))
       throw Error('Workflow VFX incompatible : utilisez {{INPUT_FILE}} ou {{SOURCE_VIDEO}} dans le nœud LoadVideo.');
+    if(!vfx&&!serialized.includes('{{SOURCE_IMAGE}}')&&!serialized.includes('{{INPUT_FILE}}'))
+      throw Error('Image de référence : le workflow doit utiliser {{SOURCE_IMAGE}} ou {{INPUT_FILE}} dans LoadImage.');
     const ext=path.extname(sourceFile).toLowerCase();
-    if(!['.mp4','.mov','.webm'].includes(ext))throw Error('Format source vidéo non pris en charge par ComfyUI.');
+    if(!['.mp4','.mov','.webm','.png','.jpg','.jpeg','.webp'].includes(ext) || (!vfx&&['.mp4','.mov','.webm'].includes(ext)))
+      throw Error('Média de référence incompatible : référence image obligatoire pour la génération.');
     const bytes=await readFile(sourceFile);
     if(bytes.length>250_000_000)throw Error('Rush VFX trop volumineux pour le transfert (250 Mo).');
     const form=new FormData();
-    form.append('image',new Blob([bytes],{type:ext==='.webm'?'video/webm':ext==='.mov'?'video/quicktime':'video/mp4'}),'niko-vfx-'+randomUUID()+ext);
+    form.append('image',new Blob([bytes],{type:ext==='.webm'?'video/webm':ext==='.mov'?'video/quicktime':ext==='.mp4'?'video/mp4':ext==='.webp'?'image/webp':ext==='.png'?'image/png':'image/jpeg'}),(vfx?'niko-vfx-':'niko-reference-')+randomUUID()+ext);
     form.append('type','input');form.append('overwrite','false');
     const uploaded=await (await fetchComfy('/upload/image',{method:'POST',body:form,signal})).json();
     inputFile=String(uploaded.subfolder?uploaded.subfolder+'/':'')+String(uploaded.name||'');
