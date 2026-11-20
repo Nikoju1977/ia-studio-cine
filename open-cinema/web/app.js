@@ -126,12 +126,14 @@ function renderLibrary(){
   }
 }
 function importFile(file){
-  const type=file.type.startsWith('image/')?'image':file.type.startsWith('video/')?'video':file.type.startsWith('audio/')?'audio':null;
+  const ext=file.name.toLowerCase().split('.').pop();
+  const type=file.type.startsWith('image/')||['png','jpeg','jpg','webp'].includes(ext)?'image':file.type.startsWith('video/')||['mp4','webm','mov'].includes(ext)?'video':file.type.startsWith('audio/')||['mp3','wav','flac','ogg','m4a'].includes(ext)?'audio':null;
   if(!type){toast('Média non pris en charge : '+file.name);return;}
+  if(file.size>250*1024*1024){toast('Fichier trop volumineux pour ce serveur (250 Mo max) : '+file.name);return;}
   const item={id:id(),name:file.name,type,url:URL.createObjectURL(file),file,duration:type==='image'?4:5};
   const el=stageSource(item);
   if(type!=='image')el.onloadedmetadata=()=>{if(Number.isFinite(el.duration))item.duration=el.duration;};
-  state.media.push(item);renderLibrary();refreshVfxSources();return item;
+  state.media.push(item);renderLibrary();refreshVfxSources();renderGenerativeChoices();return item;
 }
 function setSoundtrack(item){state.soundtrack=item;setStatus('soundtrackName',item.name);toast('Bande-son sélectionnée : '+item.name);}
 function download(blob,filename){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),45000);}
@@ -205,8 +207,8 @@ async function pollJob(){
 }
 async function runFilm(){
   if(!state.board)throw Error('Crée d’abord le découpage.');
-  if(state.board.engine!=='procedural'&&!(await api('/api/health')).comfy)throw Error('ComfyUI n’est pas connecté. Configure ton GPU/ComfyUI ou choisis le mode motion graphics.');
-  state.board.soundtrackId=state.soundtrack?.assetId||null;
+  if(state.board.engine.startsWith('comfy-')&&!(await api('/api/health')).comfy)throw Error('ComfyUI n’est pas connecté. Configure ton GPU/ComfyUI ou choisis le mode motion graphics.');
+  state.board.soundtrackId=state.board.soundtrackId||state.soundtrack?.assetId||null;
   if(state.soundtrack&&!state.board.soundtrackId){
     if(!state.soundtrack.file)throw Error('Fichier audio local introuvable.');
     setStatus('directorStatus','Téléversement de la bande-son vers ton propre PC…');
@@ -283,6 +285,83 @@ function vfxAddTimeline(){
   toast('Plan AI VFX ajouté au montage.');
 }
 
+
+// GENERATIVE SUITE — prompt technique local explicite, fichiers réels et master backend.
+let genChosen=new Set();
+const GEN_STYLES={
+  realiste:'rendu photoréaliste, détails réalistes, ton de peau naturel, mouvements cohérents',
+  nocturne:'ambiance techno nocturne, néons maîtrisés, contraste profond, atmosphère cinématographique',
+  onirique:'univers onirique, particules volumétriques, trajectoires cohérentes, halo subtil',
+  documentaire:'lumière organique, mouvements naturels, textures authentiques'
+};
+function renderGenerativeChoices(){
+  const wrap=$('genMediaChoices');if(!wrap)return;
+  wrap.replaceChildren();
+  const eligible=state.media.filter(m=>m.file&&['video','image','audio'].includes(m.type));
+  const known=new Set(eligible.map(m=>m.id));genChosen=new Set([...genChosen].filter(id=>known.has(id)));
+  if(!eligible.length){const p=document.createElement('p');p.className='hint';p.textContent='Importe des rushes ou des images de référence.';wrap.append(p);return;}
+  for(const m of eligible){
+    const row=document.createElement('label');row.className='gen-media-choice';
+    const tick=document.createElement('input');tick.type='checkbox';tick.checked=genChosen.has(m.id);
+    tick.onchange=()=>{tick.checked?genChosen.add(m.id):genChosen.delete(m.id);};
+    const name=document.createElement('span');name.textContent=m.name;const kind=document.createElement('small');kind.textContent=m.type.toUpperCase();
+    row.append(tick,name,kind);wrap.append(row);
+  }
+}
+function chosenMedia(){return state.media.filter(m=>genChosen.has(m.id)&&m.file);}
+function compileGenerativePrompt(){
+  const raw=$('genPrompt').value.trim();if(raw.length<12)throw Error('Décris un film en au moins 12 caractères.');
+  const style=GEN_STYLES[$('genStyle').value];const camera=$('genCamera').value,lens=$('genLens').value,light=$('genLight').value;
+  const result=`${raw}. Direction artistique : ${style}. Mise en scène : ${camera}, ${lens}, ${light}. Montage cinématographique à 24 i/s, continuité des personnages, des costumes et de la lumière entre les plans, composition sans texte ni filigrane.`;
+  $('genCompiled').value=result.slice(0,1500);
+  return $('genCompiled').value;
+}
+async function ensureUploaded(item){
+  if(item.assetId)return item.assetId;
+  if(!item.file)throw Error('Le média original est absent : '+item.name);
+  const response=await api('/api/upload',{method:'POST',body:item.file,raw:true,headers:{'Content-Type':'application/octet-stream','X-Filename':item.file.name}});
+  item.assetId=response.id;return response.id;
+}
+async function generativePlan(){
+  const base=$('genCompiled').value.trim()||compileGenerativePrompt();
+  if(base.length<12)throw Error('Le prompt de réalisation est trop court.');
+  const engine=$('genMode').value;
+  const assets=chosenMedia();const visual=assets.filter(m=>m.type==='image'||m.type==='video');
+  if(engine==='imported'&&!visual.length)throw Error('Sélectionne au moins une image ou vidéo à assembler.');
+  if(engine.startsWith('comfy-')&&assets.length&&assets.filter(m=>m.type==='image').length!==1)
+    throw Error('Pour une génération IA guidée, sélectionne une seule image de référence (ou aucune).');
+  if(engine.startsWith('comfy-')&&assets.some(m=>m.type==='video'))throw Error('La génération IA guidée accepte une image, pas un rush vidéo ; utilise AI VFX pour modifier un film.');
+  const count=engine==='imported'?visual.length:Number($('genCount').value);
+  if(count>12)throw Error('12 plans maximum par production automatique.');
+  const firstAudio=assets.find(m=>m.type==='audio');
+  $('filmPrompt').value=base;$('directorEngine').value=engine;
+  if(![...$('shotCount').options].some(o=>Number(o.value)===count))$('shotCount').add(new Option(String(count),String(count)));
+  $('shotCount').value=String(count);
+  $('shotSeconds').value=$('genSeconds').value;$('directorAspect').value=$('genAspect').value;
+  $('aspect').value=['9:16','1:1'].includes($('genAspect').value)?$('genAspect').value:'16:9';updatePreviewStyle();
+  $('directorGrade').value=$('genStyle').value==='nocturne'?'techno':$('genStyle').value==='documentaire'?'nature':'cinema';
+  const board=await api('/api/plan',{method:'POST',body:{prompt:base,engine,aspect:$('genAspect').value,grade:$('directorGrade').value,shotCount:count,shotSeconds:Number($('genSeconds').value)}});
+  if(engine==='imported'){
+    for(let i=0;i<board.shots.length;i++){
+      const m=visual[i];
+      board.shots[i].sourceAssetId=await ensureUploaded(m);
+      board.shots[i].title=(m.name||'Rush').slice(0,50);
+      board.shots[i].duration=Math.min(15,Math.max(1,Number(m.duration)||Number($('genSeconds').value)));
+    }
+  }
+  if(engine.startsWith('comfy-')){
+    const ref=assets.find(m=>m.type==='image');
+    if(ref){const assetId=await ensureUploaded(ref);board.shots.forEach(s=>s.referenceAssetId=assetId);}
+  }
+  if(firstAudio){board.soundtrackId=await ensureUploaded(firstAudio);state.soundtrack=firstAudio;}
+  state.board=board;renderStoryboard();
+  setStatus('genStatus',`Storyboard créé · ${board.shots.length} plan(s) · ${engine==='imported'?'montage des rushes réels':'modèle '+engine}. Tu peux modifier chaque plan dans Auto-réalisation.`);
+  return board;
+}
+async function generativeProduce(){
+  await generativePlan();tab('director');await runFilm();
+}
+
 function bind(){
   document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{tab(b.dataset.tab);if(b.dataset.tab==='vfx')refreshVfxCapabilities().catch(e=>setStatus('vfxReadiness',e.message,true));});
   $('vfxPlan').onclick=()=>vfxAnalyze().catch(e=>setStatus('vfxStatus',e.message,true));
@@ -300,6 +379,11 @@ function bind(){
   };
   $('testBackend').onclick=()=>connect().catch(()=>{});
   $('importMedia').onchange=e=>{for(const f of e.target.files)importFile(f);e.target.value='';};
+  $('genFiles').onchange=e=>{for(const f of e.target.files){const m=importFile(f);if(m)genChosen.add(m.id);}renderGenerativeChoices();e.target.value='';};
+  $('genCompose').onclick=()=>{try{compileGenerativePrompt();setStatus('genStatus','Prompt technique compilé ; tu peux le modifier puis créer le storyboard.');}catch(e){setStatus('genStatus',e.message,true);}};
+  $('genPlan').onclick=()=>generativePlan().catch(e=>setStatus('genStatus',e.message,true));
+  $('genProduce').onclick=()=>generativeProduce().catch(e=>{setStatus('genStatus',e.message,true);setStatus('directorStatus',e.message,true);$('runFilm').disabled=false;$('cancelFilm').disabled=true;});
+  $('genCopy').onclick=()=>navigator.clipboard.writeText($('genCompiled').value).then(()=>toast('Prompt copié')).catch(()=>toast('Copie impossible.'));
   $('addImages').onclick=()=>$('importMedia').click();
   $('soundtrackInput').onchange=e=>{const f=e.target.files?.[0];if(f){const item=importFile(f);if(item)setSoundtrack(item);}e.target.value='';};
   $('aspect').onchange=updatePreviewStyle;
