@@ -5,6 +5,9 @@
 const $ = id => document.getElementById(id);
 const state={media:[],scenes:[],selected:null,playing:false,playhead:0,ticker:0,last:0,
   soundtrack:null,board:null,jobId:null,master:null,server:'',outputType:'video/webm',auth:false,grade:{brightness:0,contrast:100,saturation:100,temperature:0}};
+// Mobile-only mode: all control, editing and browser exports run on the phone.
+// Photorealistic Agnes generation still uses a remote GPU; keys live only in RAM.
+const mobile={mode:false,keys:[],next:0,job:null,polling:false,busy:false};
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const id=()=>globalThis.crypto?.randomUUID?.()||String(Date.now())+Math.random().toString(16).slice(2);
 const fileName=s=>String(s||'film').normalize('NFKD').replace(/[^a-zA-Z0-9_-]/g,'_').slice(0,65);
@@ -26,17 +29,143 @@ async function api(route,{method='GET',body,signal,raw=false,headers={}}={}){
 async function connect(){
   try{
     const h=await api('/api/health');
-    state.auth=h.authorized;
-    $('connection').innerHTML='<i></i> '+(h.authorized?'CONNECTÉ':'AUTHENTIFICATION');
-    $('connection').classList.toggle('online',!!h.authorized);
-    $('monitorInfo').textContent='4K MASTER · 24 FPS · '+(h.ffmpeg?'FFMPEG PRÊT':'FFMPEG ABSENT');
-    setStatus('backendStatus',h.authorized?`Serveur connecté · FFmpeg ${h.ffmpeg?'OK':'absent'} · ComfyUI ${h.comfy?'disponible':'non connecté'}`:'Serveur détecté : code nécessaire.');
+    mobile.mode=h.mobile===true;
+    state.auth=!!h.authorized;
+    $('connection').innerHTML='<i></i> '+(mobile.mode?'MODE TÉLÉPHONE':h.authorized?'CONNECTÉ':'AUTHENTIFICATION');
+    $('connection').classList.toggle('online',mobile.mode||!!h.authorized);
+    $('monitorInfo').textContent=mobile.mode?'MONTAGE MOBILE · EXPORT SELON APPAREIL':'4K MASTER · 24 FPS · '+(h.ffmpeg?'FFMPEG PRÊT':'FFMPEG ABSENT');
+    if(mobile.mode){
+      setStatus('backendStatus','Mode téléphone opérationnel : montage et export dans ce navigateur. Agnes utilise des GPU distants, pas un ordinateur personnel.');
+      setStatus('directorStatus','Mode téléphone prêt. Pour créer des plans IA, choisis Agnes et ajoute ta clé dans l’onglet Agnes AI.');
+      setStatus('aiStatus','Ajoute une clé Agnes pour générer des images ou des vidéos depuis ton téléphone. Gratuité selon les quotas Agnes.');
+    }else setStatus('backendStatus',h.authorized?`Serveur connecté · FFmpeg ${h.ffmpeg?'OK':'absent'} · ComfyUI ${h.comfy?'disponible':'non connecté'}`:'Serveur détecté : code nécessaire.');
     return h;
-  }catch(e){$('connection').innerHTML='<i></i> HORS LIGNE';setStatus('backendStatus','Connexion impossible : '+e.message,true);throw e;}
+  }catch(e){
+    mobile.mode=true;state.auth=false;
+    $('connection').innerHTML='<i></i> MONTAGE LOCAL';$('connection').classList.add('online');
+    $('monitorInfo').textContent='MONTAGE LOCAL · SERVEUR ABSENT';
+    setStatus('backendStatus','Mode hors ligne : importe, monte et exporte dans le navigateur. La génération Agnes exige une connexion Internet.',true);
+    return {mobile:true,authorized:false,ffmpeg:false,comfy:false};
+  }
 }
 async function authorize(token){
   await api('/api/session',{method:'POST',body:{token}});
   await connect();
+}
+// Never save Agnes keys in localStorage, project JSON, URLs or the repository.
+function addAgnesKeys(){
+  const el=$('agnesKeys');const incoming=el.value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  let added=0;for(const key of incoming){if(key.length<12||key.length>600)continue;if(!mobile.keys.includes(key)){mobile.keys.push(key);added++;}}
+  el.value='';$('agnesKeyCount').textContent=mobile.keys.length+' clé(s) en mémoire pour cet onglet.';
+  toast(added+' clé(s) ajoutée(s) sans stockage permanent.');
+}
+async function agnesRequest(body,keyIndex){
+  const key=mobile.keys[keyIndex];if(!key)throw Error('Ajoute une clé Agnes AI.');
+  return api('/api/agnes',{method:'POST',body:{...body,key}});
+}
+function addGeneratedMedia(type,url,prompt){
+  if(!(/^https:\/\//i.test(url)||/^data:image\/(png|jpeg|webp);base64,/i.test(url)))throw Error('Adresse de média retournée non sécurisée.');
+  const item={id:id(),name:'Agnes '+type+' · '+prompt.slice(0,34),type,url,duration:type==='video'?5:4,file:null};
+  state.media.push(item);renderLibrary();refreshVfxSources();renderGenerativeChoices();
+  return item;
+}
+async function pollAgnesVideo(videoId,keyIndex,{silent=false}={}){
+  const data=await agnesRequest({action:'poll',videoId},keyIndex);
+  const status=String(data.status||'en attente').toLowerCase();
+  const percent=Number(data.progress);const progress=Number.isFinite(percent)?' '+Math.max(0,Math.min(100,percent))+' %':'';
+  if(!silent)setStatus('aiStatus','Agnes : '+status+progress);
+  if(['completed','succeeded','success','done'].includes(status)){
+    const url=data.metadata?.url||data.output?.url||data.url||data.data?.url;
+    if(typeof url!=='string')throw Error('Agnes signale une fin de tâche sans URL vidéo.');
+    return {done:true,url};
+  }
+  if(['failed','error','cancelled','canceled'].includes(status))throw Error('Échec Agnes : '+String(data.error?.message||data.error||status).slice(0,180));
+  return {done:false,status};
+}
+function presentGenerated(item){
+  const box=$('aiResult');box.replaceChildren();
+  const media=document.createElement(item.type==='video'?'video':'img');
+  media.src=item.url;media.style.maxWidth='100%';media.style.borderRadius='12px';
+  if(item.type==='video'){media.controls=true;media.playsInline=true;media.preload='metadata';}
+  const actions=document.createElement('div');actions.className='action-row';
+  const add=document.createElement('button');add.className='outline-btn';add.textContent='＋ Ajouter au montage';add.onclick=()=>{addScene(item);tab('media');};
+  const link=document.createElement('a');link.href=item.url;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Ouvrir / enregistrer le média';link.className='outline-btn';
+  actions.append(add,link);box.append(media,actions);
+  setStatus('aiStatus','Média reçu. Télécharge-le sur ton téléphone pour le conserver et le réimporter si le CDN bloque l’export.');
+}
+async function generateAgnesMobile(){
+  if(mobile.busy||mobile.job)throw Error('Une génération vidéo est déjà en cours. Vérifie le résultat avant une nouvelle demande.');
+  if(!mobile.mode)throw Error('Le bouton Agnes mobile nécessite le mode Vercel.');
+  if(!$('agnesConsent').checked)throw Error('Vérifie ton quota gratuit Agnes et coche la confirmation avant de générer.');
+  const prompt=$('prompt').value.trim();if(prompt.length<8)throw Error('Précise ton prompt (8 caractères minimum).');
+  if(!mobile.keys.length)throw Error('Ajoute ta clé API Agnes avant de générer.');
+  const kind=$('aiType').value,keyIndex=mobile.next++%mobile.keys.length;
+  mobile.busy=true;$('generate').disabled=true;
+  try{
+    setStatus('aiStatus','Envoi de la génération '+kind+' à Agnes…');
+    const aspect=$('aspect').value, seconds=Number($('agnesSeconds').value)||5;
+    const data=await agnesRequest({action:kind,prompt,aspect,seconds},keyIndex);
+    if(kind==='image'){
+      const first=data.data?.[0];const url=first?.url||(first?.b64_json?'data:image/png;base64,'+first.b64_json:null);
+      if(!url)throw Error('Agnes n’a retourné aucune image.');
+      const item=addGeneratedMedia('image',url,prompt);presentGenerated(item);
+    }else{
+      const videoId=String(data.video_id||data.id||data.task_id||'');if(!videoId)throw Error('Agnes n’a pas fourni d’identifiant vidéo.');
+      mobile.job={videoId,keyIndex,prompt,seconds};$('checkJob').hidden=false;
+      setStatus('aiStatus','Tâche vidéo acceptée. Vérification périodique du résultat…');
+      await pollActiveAgnes();
+    }
+  }finally{mobile.busy=false;$('generate').disabled=false;}
+}
+async function pollActiveAgnes(){
+  if(!mobile.job||mobile.polling)return;
+  mobile.polling=true;
+  try{
+    const j=mobile.job;const result=await pollAgnesVideo(j.videoId,j.keyIndex);
+    if(result.done){mobile.job=null;$('checkJob').hidden=true;const item=addGeneratedMedia('video',result.url,j.prompt);item.duration=j.seconds;presentGenerated(item);}
+    else if(mobile.job)setTimeout(()=>pollActiveAgnes().catch(e=>setStatus('aiStatus',e.message,true)),9000);
+  }catch(e){setStatus('aiStatus',e.message,true);throw e;}
+  finally{mobile.polling=false;}
+}
+function mobileStoryboard({prompt,engine,aspect,grade,count,seconds,assets=[]}){
+  const names=['Plan d’ouverture','Plan d’ensemble','Plan rapproché','Travelling','Plan de détail','Plan final'];
+  return {id:id(),title:prompt.slice(0,50),aspect,grade,engine,shots:Array.from({length:count},(_,i)=>({
+    id:id(),index:i+1,title:names[i%names.length],duration:seconds,camera:['travelling avant','plan fixe','caméra orbitale'][i%3],
+    prompt:prompt+' ; '+names[i%names.length]+', séquence '+(i+1)+'/'+count+', caméra cinématographique, continuité visuelle, pas de filigrane.',
+    sourceMediaId:engine==='imported'?assets[i]?.id:null
+  }))};
+}
+async function mobileRealize(){
+  const board=state.board;
+  if(board.engine==='imported'){
+    const ids=board.shots.map(s=>s.sourceMediaId).filter(Boolean);
+    if(!ids.length)throw Error('Importe des rushes et sélectionne-les pour ce montage.');
+    state.scenes=[];for(const mediaId of ids){const media=state.media.find(m=>m.id===mediaId);if(media)addScene(media);}
+    tab('export');setStatus('directorStatus','Montage préparé sur le téléphone. Encodage du fichier en cours…');
+    await exportPreview();
+    return;
+  }
+  if(board.engine==='agnes-video-flash'){
+    if(!$('agnesConsent').checked)throw Error('Vérifie et confirme ton quota Agnes avant l’Autopilot.');
+    if(!mobile.keys.length)throw Error('Ajoute au moins une clé Agnes.');
+    state.scenes=[];
+    for(const [i,shot] of board.shots.entries()){
+      setStatus('directorStatus','Agnes : plan '+(i+1)+'/'+board.shots.length+' · envoi…');
+      const keyIndex=mobile.next++%mobile.keys.length;
+      const data=await agnesRequest({action:'video',prompt:shot.prompt,aspect:board.aspect==='17:9'?'16:9':board.aspect,seconds:[4,5,8,12].includes(shot.duration)?shot.duration:5},keyIndex);
+      const videoId=String(data.video_id||data.id||data.task_id||'');if(!videoId)throw Error('Création ambiguë : consulte l’historique Agnes avant de relancer.');
+      let result;for(let n=0;n<75;n++){
+        await new Promise(r=>setTimeout(r,9000));result=await pollAgnesVideo(videoId,keyIndex,{silent:true});
+        if(result.done)break;setStatus('directorStatus','Plan '+(i+1)+'/'+board.shots.length+' · '+result.status);
+      }
+      if(!result?.done)throw Error('Délai Agnes dépassé ; vérifie la tâche avant toute relance.');
+      const item=addGeneratedMedia('video',result.url,shot.prompt);item.duration=shot.duration;addScene(item);
+    }
+    tab('export');setStatus('directorStatus','Plans reçus. Export automatique navigateur en cours…');
+    await exportPreview();
+    return;
+  }
+  throw Error('Ce moteur exige un GPU externe. Sur téléphone seul, utilise Agnes ou monte des rushes importés.');
 }
 function updatePreviewStyle(){
   const aspect=$('aspect').value;
@@ -139,6 +268,13 @@ function setSoundtrack(item){state.soundtrack=item;setStatus('soundtrackName',it
 function download(blob,filename){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),45000);}
 async function exportPreview(){
   const canvas=$('preview');if(!state.scenes.length)throw Error('Aucun plan à exporter.');
+  const oldWidth=canvas.width,oldHeight=canvas.height;
+  const quality=Number($('quality').value)||720;
+  const aspect=$('aspect').value;
+  canvas.width=aspect==='9:16'?quality:aspect==='1:1'?quality:Math.round(quality*16/9);
+  canvas.height=aspect==='9:16'?Math.round(quality*16/9):quality;
+  drawPreview();
+  try {
   if(!canvas.captureStream||!window.MediaRecorder)throw Error('Capture vidéo indisponible sur ce navigateur.');
   const mime=['video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/webm;codecs=vp9,opus','video/webm'].find(MediaRecorder.isTypeSupported);
   if(!mime)throw Error('Aucun codec export compatible.');
@@ -158,7 +294,8 @@ async function exportPreview(){
   rec.stop();await done;state.playing=false;stopElements();music?.pause();await ac?.close();stream.getTracks().forEach(t=>t.stop());
   const blob=new Blob(chunks,{type:mime});if(blob.size<1024)throw Error('Fichier de sortie vide.');
   download(blob,'studio-niko-apercu.'+(mime.includes('mp4')?'mp4':'webm'));
-  setStatus('exportStatus','Aperçu créé ('+Math.round(blob.size/1024/1024*10)/10+' Mo). Ceci n’est pas le master 4K.');
+  setStatus('exportStatus','Fichier navigateur créé ('+Math.round(blob.size/1024/1024*10)/10+' Mo). Résolution demandée : '+canvas.width+'×'+canvas.height+'. Pas de certification FFprobe ni garantie 4K native.');
+  } finally { canvas.width=oldWidth;canvas.height=oldHeight;drawPreview(); }
 }
 function seek(t){state.playhead=clamp(t,0,duration());drawPreview();}
 function togglePlay(){
@@ -187,7 +324,7 @@ async function planFilm(){
   const prompt=$('filmPrompt').value.trim();const engine=$('directorEngine').value;
   if(prompt.length<12)throw Error('Décris ton film en au moins 12 caractères.');
   const payload={prompt,engine,aspect:$('directorAspect').value,grade:$('directorGrade').value,shotCount:Number($('shotCount').value),shotSeconds:Number($('shotSeconds').value)};
-  state.board=await api('/api/plan',{method:'POST',body:payload});renderStoryboard();
+  state.board=mobile.mode?mobileStoryboard({prompt,engine,aspect:payload.aspect,grade:payload.grade,count:payload.shotCount,seconds:payload.shotSeconds,assets:state.media.filter(m=>m.type!=='audio')}):await api('/api/plan',{method:'POST',body:payload});renderStoryboard();
   setStatus('directorStatus','Découpage prêt. Modifie les plans si nécessaire, puis lance la réalisation.');
 }
 let jobPoll=null;
@@ -207,6 +344,7 @@ async function pollJob(){
 }
 async function runFilm(){
   if(!state.board)throw Error('Crée d’abord le découpage.');
+  if(mobile.mode)return mobileRealize();
   if(state.board.engine.startsWith('comfy-')&&!(await api('/api/health')).comfy)throw Error('ComfyUI n’est pas connecté. Configure ton GPU/ComfyUI ou choisis le mode motion graphics.');
   state.board.soundtrackId=state.board.soundtrackId||state.soundtrack?.assetId||null;
   if(state.soundtrack&&!state.board.soundtrackId){
@@ -233,12 +371,14 @@ function refreshVfxSources(){
   if([...select.options].some(o=>o.value===prev))select.value=prev;
 }
 async function refreshVfxCapabilities(){
+  if(mobile.mode){$('vfxReadiness').textContent='Sur téléphone : la génération Agnes fonctionne dans son onglet. Le VFX neuronaux avec suivi image par image nécessite encore un service spécialisé non connecté.';return;}
   const data=await api('/api/vfx/effects');
   const available=Object.entries(data.effects).filter(([,value])=>value.installed).map(([,value])=>value.name);
   $('vfxReadiness').textContent='GPU ComfyUI : '+(data.gpu?'connecté':'indisponible')+' · Workflows AI VFX : '+available.length+'/8 installés.'+
     (available.length?' Disponibles : '+available.join(' · '):' Exporte tes graphes de modèles dans workflows/vfx/*.json sur le PC.');
 }
 async function vfxAnalyze(){
+  if(mobile.mode)throw Error('Le moteur VFX vidéo-à-vidéo n’est pas connecté dans le mode téléphone. Agnes peut créer un nouveau plan, mais pas transformer fidèlement un rush entier.');
   const prompt=$('vfxPrompt').value.trim();
   vfxPlan=await api('/api/vfx/plan',{method:'POST',body:{effect:$('vfxEffect').value,prompt,
     aspect:$('directorAspect').value,grade:$('directorGrade').value}});
@@ -334,26 +474,25 @@ async function generativePlan(){
   const count=engine==='imported'?visual.length:Number($('genCount').value);
   if(count>12)throw Error('12 plans maximum par production automatique.');
   const firstAudio=assets.find(m=>m.type==='audio');
-  $('filmPrompt').value=base;$('directorEngine').value=engine;
-  if(![...$('shotCount').options].some(o=>Number(o.value)===count))$('shotCount').add(new Option(String(count),String(count)));
-  $('shotCount').value=String(count);
+  $('filmPrompt').value=base;$('directorEngine').value=engine;if(![...$('shotCount').options].some(o=>Number(o.value)===count))$('shotCount').add(new Option(String(count),String(count)));$('shotCount').value=String(count);
   $('shotSeconds').value=$('genSeconds').value;$('directorAspect').value=$('genAspect').value;
   $('aspect').value=['9:16','1:1'].includes($('genAspect').value)?$('genAspect').value:'16:9';updatePreviewStyle();
   $('directorGrade').value=$('genStyle').value==='nocturne'?'techno':$('genStyle').value==='documentaire'?'nature':'cinema';
-  const board=await api('/api/plan',{method:'POST',body:{prompt:base,engine,aspect:$('genAspect').value,grade:$('directorGrade').value,shotCount:count,shotSeconds:Number($('genSeconds').value)}});
+  const board=mobile.mode?mobileStoryboard({prompt:base,engine,aspect:$('genAspect').value,grade:$('directorGrade').value,count,seconds:Number($('genSeconds').value),assets:visual}):await api('/api/plan',{method:'POST',body:{prompt:base,engine,aspect:$('genAspect').value,grade:$('directorGrade').value,shotCount:count,shotSeconds:Number($('genSeconds').value)}});
   if(engine==='imported'){
     for(let i=0;i<board.shots.length;i++){
       const m=visual[i];
-      board.shots[i].sourceAssetId=await ensureUploaded(m);
+      board.shots[i].sourceAssetId=mobile.mode?null:await ensureUploaded(m);
+      if(mobile.mode)board.shots[i].sourceMediaId=m.id;
       board.shots[i].title=(m.name||'Rush').slice(0,50);
       board.shots[i].duration=Math.min(15,Math.max(1,Number(m.duration)||Number($('genSeconds').value)));
     }
   }
   if(engine.startsWith('comfy-')){
     const ref=assets.find(m=>m.type==='image');
-    if(ref){const assetId=await ensureUploaded(ref);board.shots.forEach(s=>s.referenceAssetId=assetId);}
+    if(ref&&!mobile.mode){const assetId=await ensureUploaded(ref);board.shots.forEach(s=>s.referenceAssetId=assetId);}
   }
-  if(firstAudio){board.soundtrackId=await ensureUploaded(firstAudio);state.soundtrack=firstAudio;}
+  if(firstAudio){if(!mobile.mode)board.soundtrackId=await ensureUploaded(firstAudio);state.soundtrack=firstAudio;}
   state.board=board;renderStoryboard();
   setStatus('genStatus',`Storyboard créé · ${board.shots.length} plan(s) · ${engine==='imported'?'montage des rushes réels':'modèle '+engine}. Tu peux modifier chaque plan dans Auto-réalisation.`);
   return board;
@@ -361,7 +500,6 @@ async function generativePlan(){
 async function generativeProduce(){
   await generativePlan();tab('director');await runFilm();
 }
-
 function bind(){
   document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{tab(b.dataset.tab);if(b.dataset.tab==='vfx')refreshVfxCapabilities().catch(e=>setStatus('vfxReadiness',e.message,true));});
   $('vfxPlan').onclick=()=>vfxAnalyze().catch(e=>setStatus('vfxStatus',e.message,true));
@@ -371,7 +509,7 @@ function bind(){
   $('vfxPrompt').oninput=()=>{vfxPlan=null;$('vfxExecute').disabled=true;};
   $('vfxEffect').onchange=()=>{vfxPlan=null;$('vfxExecute').disabled=true;};
   document.querySelectorAll('[data-prompt]').forEach(b=>b.onclick=()=>{$('prompt').value=b.dataset.prompt;});
-  $('settingsButton').onclick=()=>$('settingsDialog').showModal();
+  $('settingsButton').onclick=()=>{if(mobile.mode){tab('ai');$('agnesKeys').focus();toast('Ajoute tes clés Agnes dans cet onglet. Aucun PC nécessaire.');}else $('settingsDialog').showModal();};
   $('saveSettings').onclick=e=>{e.preventDefault();const input=$('backendUrl').value.trim();
     if(input&&new URL(input).origin!==location.origin){toast('Pour protéger la session, ouvre directement cette adresse serveur dans le navigateur (même origine).');return;}
     const token=$('serverToken').value;$('serverToken').value='';
@@ -384,6 +522,7 @@ function bind(){
   $('genPlan').onclick=()=>generativePlan().catch(e=>setStatus('genStatus',e.message,true));
   $('genProduce').onclick=()=>generativeProduce().catch(e=>{setStatus('genStatus',e.message,true);setStatus('directorStatus',e.message,true);$('runFilm').disabled=false;$('cancelFilm').disabled=true;});
   $('genCopy').onclick=()=>navigator.clipboard.writeText($('genCompiled').value).then(()=>toast('Prompt copié')).catch(()=>toast('Copie impossible.'));
+
   $('addImages').onclick=()=>$('importMedia').click();
   $('soundtrackInput').onchange=e=>{const f=e.target.files?.[0];if(f){const item=importFile(f);if(item)setSoundtrack(item);}e.target.value='';};
   $('aspect').onchange=updatePreviewStyle;
@@ -413,11 +552,13 @@ function bind(){
   $('exportServer').onclick=()=>{if(state.master){tab('export');$('masterPreview').hidden=false;$('masterPreview').src=state.server+state.master;}
     else toast('Lance d’abord un master dans Auto-réalisation.');};
   $('exportLocal').onclick=()=>exportPreview().catch(e=>setStatus('exportStatus',e.message,true));
-  $('generate').onclick=()=>{$('filmPrompt').value=$('prompt').value;$('directorEngine').value=$('aiType').value==='image'?'comfy-image':'comfy-video';$('shotCount').value='3';tab('director');planFilm().catch(e=>setStatus('directorStatus',e.message,true));};
-  $('checkJob').onclick=()=>pollJob();
+  $('generate').onclick=()=>generateAgnesMobile().catch(e=>setStatus('aiStatus',e.message,true));
+  $('checkJob').onclick=()=>pollActiveAgnes().catch(e=>setStatus('aiStatus',e.message,true));
+  $('addAgnesKeys').onclick=addAgnesKeys;
+  $('clearAgnesKeys').onclick=()=>{mobile.keys.length=0;mobile.job=null;$('agnesKeyCount').textContent='Aucune clé en mémoire.';toast('Clés effacées de cet onglet.');};
 }
 async function initialize(){bind();updatePreviewStyle();renderLibrary();refreshVfxSources();updateStage();
   if('serviceWorker'in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
-  try{const result=await connect();if(!result.authorized){$('settingsDialog').showModal();}}catch{setStatus('directorStatus','Serveur indisponible. Démarre le serveur Node pour accéder au rendu 4K.',true);}
+  const result=await connect();if(!result.authorized&&!mobile.mode)$('settingsDialog').showModal();
 }
 initialize();
