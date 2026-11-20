@@ -36,3 +36,11 @@
 .mobile-keys textarea{width:100%;min-height:64px;font-family:monospace;font-size:12px}
 .agen-consent{display:flex;align-items:flex-start;gap:10px;margin-top:14px;line-height:1.45;color:#dfedfc;font-size:13px}
 .agen-consent input{flex:0 0 18px;width:18px;height:18px;margin:2px 0 0;accent-color:#a6ebcc}
+
+/* Saturation Agnes : sortie de secours mobile sans faux rendu */
+.agnes-recovery{margin:12px 0 20px;padding:16px;background:#19212d;border:1px solid #af8666;border-radius:14px;overflow-wrap:anywhere}
+.agnes-recovery[hidden]{display:none}
+.agnes-recovery strong{display:block;color:#f1cb93;margin-bottom:8px;font-size:15px}
+.agnes-recovery p{color:#c6d2e4;line-height:1.55;margin:0 0 12px}
+.agnes-recovery .action-row{margin:12px 0}
+.agnes-recovery button{min-height:48px;white-space:normal;text-align:center}
