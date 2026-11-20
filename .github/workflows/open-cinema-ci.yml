@@ -1,0 +1,32 @@
+name: Open Cinema Engine / Node quality checks
+on:
+  push:
+    paths:
+      - "open-cinema/**"
+      - ".github/workflows/open-cinema-ci.yml"
+  pull_request:
+    paths:
+      - "open-cinema/**"
+      - ".github/workflows/open-cinema-ci.yml"
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: open-cinema
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Static syntax
+        run: npm run check
+      - name: Unit tests
+        run: npm test
+      - name: Report optional FFmpeg availability
+        run: |
+          if command -v ffmpeg >/dev/null 2>&1; then
+            ffmpeg -version | head -n 1
+          else
+            echo "FFmpeg absent on hosted runner; real 4K smoke tested separately."
+          fi

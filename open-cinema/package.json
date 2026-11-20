@@ -1,0 +1,14 @@
+{
+  "name": "studio-niko-open-cinema-ai",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "Mobile-first open cinema director with local ComfyUI and verified FFmpeg 4K delivery",
+  "scripts": {
+    "start": "node server/index.mjs",
+    "test": "node --test test/*.test.mjs",
+    "check": "node --check server/index.mjs && node --check server/engine.mjs && node --check server/comfy.mjs && node --check server/agnes.mjs && node --check server/vfx.mjs && node --check web/app.js"
+  },
+  "engines": { "node": ">=22" },
+  "license": "MIT"
+}
