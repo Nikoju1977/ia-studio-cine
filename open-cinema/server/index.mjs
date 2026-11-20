@@ -22,7 +22,7 @@ const jobs=new Map();
 const vfxJobs=new Map();
 const sessions=new Set();
 const MAX_UPLOAD=250*1024*1024;
-const MIME={'.html':'text/html','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.json':'application/json','.webmanifest':'application/manifest+json','.ico':'image/x-icon','.mp4':'video/mp4','.webm':'video/webm','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.wav':'audio/wav','.mp3':'audio/mpeg','.ogg':'audio/ogg'};
+const MIME={'.html':'text/html','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.json':'application/json','.webmanifest':'application/manifest+json','.ico':'image/x-icon','.mp4':'video/mp4','.webm':'video/webm','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.wav':'audio/wav','.mp3':'audio/mpeg','.flac':'audio/flac','.m4a':'audio/mp4','.mov':'video/quicktime','.ogg':'audio/ogg'};
 const error=(code,message)=>Object.assign(new Error(message),{status:code});
 const json=(res,code,data)=>{res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data));};
 function localRequest(req){return ['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress);}
@@ -69,7 +69,13 @@ async function runJob(job,signal){
       job.progress=Math.round(3+i/board.shots.length*75);
       const base=path.join(folder,`source-${String(i+1).padStart(2,'0')}`);
       let source,kind='image';
-      if(board.engine==='procedural'){
+      if(board.engine==='imported'){
+        if(!shot.sourceAssetId)throw new Error(`Le plan ${i+1} n'a aucun média importé.`);
+        source=await findAsset(shot.sourceAssetId);
+        const meta=await inspectMedia(source,{signal});
+        kind=/\.(png|jpe?g|webp)$/i.test(source)?'image':meta.streams?.some(s=>s.codec_type==='video')?'video':'audio';
+        if(kind==='audio')throw new Error('Le média du plan '+(i+1)+' ne contient aucune image vidéo.');
+      }else if(board.engine==='procedural'){
         source=base+'.png';await proceduralFrame(source,shot,board.aspect,board.grade);
       }else if(board.engine.startsWith('agnes-')){
         job.step=`Plan ${i+1}/${board.shots.length} · Agnes AI Flash`;
@@ -77,7 +83,10 @@ async function runJob(job,signal){
         source=generated.file;kind=generated.kind;
       }else{
         job.step=`Plan ${i+1}/${board.shots.length} · GPU ComfyUI`;
-        const generated=await generateComfy({mode:board.engine,shot,aspect:board.aspect,output:base,signal,workflowRoot:WORKFLOWS,onProgress:message=>{job.step=message;}});
+        const reference=shot.referenceAssetId?await findAsset(shot.referenceAssetId):null;
+        if(reference){const meta=await inspectMedia(reference,{signal});if(!meta.streams?.some(s=>s.codec_type==='video'&&s.width>0))
+          throw new Error('La référence IA doit être une image valide.');}
+        const generated=await generateComfy({mode:board.engine,shot,aspect:board.aspect,output:base,signal,workflowRoot:WORKFLOWS,sourceFile:reference,onProgress:message=>{job.step=message;}});
         source=generated.file;kind=generated.kind;
       }
       const dest=path.join(folder,`shot-${String(i+1).padStart(2,'0')}.mp4`);
@@ -120,17 +129,21 @@ async function findAsset(id){if(!/^[0-9a-f-]{36}$/.test(id))throw error(400,'ID 
 async function upload(req,res){
   const length=Number(req.headers['content-length']);if(!Number.isSafeInteger(length)||length<1||length>MAX_UPLOAD)throw error(413,'Fichier trop volumineux ou taille absente (250 Mo max)');
   const name=String(req.headers['x-filename']||'media.bin');const ext=path.extname(name).toLowerCase();
-  if(!['.mp3','.wav','.ogg','.m4a','.mp4','.webm','.mov','.png','.jpeg','.jpg','.webp'].includes(ext))throw error(415,'Extension non autorisée');
+  if(!['.mp3','.wav','.flac','.ogg','.m4a','.mp4','.webm','.mov','.png','.jpeg','.jpg','.webp'].includes(ext))throw error(415,'Extension non autorisée');
   const buffer=await readBody(req,MAX_UPLOAD);if(buffer.length!==length)throw error(400,'Transfert incomplet');
-  const id=randomUUID();await writeFile(path.join(ASSETS,id+ext),buffer,{flag:'wx'});
-  json(res,201,{id,name:name.slice(0,120),bytes:buffer.length,url:'/api/assets/'+id});
+  const id=randomUUID(),file=path.join(ASSETS,id+ext);await writeFile(file,buffer,{flag:'wx'});
+  try{const info=await inspectMedia(file);
+    if(!info.streams?.some(s=>['video','audio'].includes(s.codec_type)))throw error(415,'Aucune piste multimédia valide dans le fichier');
+    json(res,201,{id,name:name.slice(0,120),bytes:buffer.length,url:'/api/assets/'+id,
+      duration:Number(info.format?.duration)||null,streams:info.streams?.filter(s=>['video','audio'].includes(s.codec_type))||[]});
+  }catch(e){await (await import('node:fs/promises')).unlink(file).catch(()=>{});throw e;}
 }
 async function route(req,res){
   checkOrigin(req);const url=new URL(req.url,'http://localhost');const pathName=url.pathname;
   if(pathName==='/api/health'&&req.method==='GET'){
     const ffmpeg=await new Promise(resolve=>{runProcess('ffmpeg',['-version'],{timeoutMs:4000}).then(()=>resolve(true),()=>resolve(false));});
     const comfy=await comfyStatus();
-    return json(res,200,{app:'Studio Niko Open Cinema',version:'0.2.0',ffmpeg,comfy:comfy.available,workflows:'export API requis',resolution:'4K',agnes:{enabled:agnesEnabled(),...agnesKeyStatus()},authentication:!!PASSWORD,authorized:authorized(req)});
+    return json(res,200,{app:'Studio Niko Open Cinema',version:'0.3.0',ffmpeg,comfy:comfy.available,workflows:'export API requis',resolution:'4K',agnes:{enabled:agnesEnabled(),...agnesKeyStatus()},authentication:!!PASSWORD,authorized:authorized(req)});
   }
   if(pathName==='/api/session'&&req.method==='POST'){
     if(!PASSWORD&&!localRequest(req))throw error(403,'Définissez STUDIO_TOKEN pour l’accès depuis un autre appareil');
@@ -194,7 +207,19 @@ async function route(req,res){
       if(!b.agnesFreeConsent)throw error(403,'Confirmez d’abord avoir vérifié le tarif Flash gratuit sur Agnes. Aucun passage automatique à un modèle payant.');
       for(const shot of board.shots)assertAgnesAllowed(board.engine,board.aspect,shot.duration,b.agnesFreeConsent);
     }
-    if(board.soundtrackId)await findAsset(board.soundtrackId);
+    if(board.soundtrackId){const audio=await inspectMedia(await findAsset(board.soundtrackId));
+      if(!audio.streams?.some(s=>s.codec_type==='audio'))throw error(415,'Bande-son importée sans piste audio.');}
+    for(const shot of board.shots){
+      if(board.engine==='imported'){
+        if(!shot.sourceAssetId)throw error(400,'Chaque plan importé doit avoir un média source.');
+        const source=await findAsset(shot.sourceAssetId);const info=await inspectMedia(source);
+        if(!info.streams?.some(s=>s.codec_type==='video'))throw error(415,'Média importé non visuel : '+shot.title);
+      }
+      if(board.engine.startsWith('comfy-')&&shot.referenceAssetId){
+        const source=await findAsset(shot.referenceAssetId);const info=await inspectMedia(source);
+        if(!info.streams?.some(s=>s.codec_type==='video'))throw error(415,'Référence IA image invalide.');
+      }
+    }
     const id=randomUUID();const controller=new AbortController();
     const job={id,status:'queued',step:'Préparation',progress:0,error:null,createdAt:new Date().toISOString(),storyboard:board,shots:[],controller};
     jobs.set(id,job);void runJob(job,controller.signal);
