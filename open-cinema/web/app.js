@@ -100,7 +100,7 @@ function presentGenerated(item){
 }
 function isAgnesQueueFull(e){
   return e?.code==='AGNES_VIDEO_QUEUE_FULL'||
-    (e?.httpStatus===503&&/queue[\\s_-]*(?:is[\\s_-]*)?full|file.*satur|saturat/i.test(String(e?.message||'')));
+    (e?.httpStatus===503&&/queue[\s_-]*(?:is[\s_-]*)?full|file.*satur|saturat/i.test(String(e?.message||'')));
 }
 function showAgnesRecovery(e){
   if(!isAgnesQueueFull(e))return false;
