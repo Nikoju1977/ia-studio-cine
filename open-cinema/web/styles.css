@@ -16,3 +16,17 @@
 .vfx-preview video{display:block;width:100%;max-height:55vh;object-fit:contain;background:#05070c;border:1px solid #374457;border-radius:13px}
 .vfx-preview a{text-align:center;text-decoration:none}
 @media(max-width:700px){#tab-vfx .action-row>*{flex:1 1 130px}#tab-vfx select{max-width:100%}}
+
+/* Generative Suite v0.3: compact touch controls, no fake AI previews */
+.gen-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}
+.gen-grid label{display:grid;gap:6px;color:var(--muted);font-size:12px;font-weight:700}
+.gen-grid select,#genMode,#genFiles{width:100%;min-width:0}
+.gen-reference-panel,.gen-compiled{background:#0b1421;border:1px solid #35465c;border-radius:12px;padding:12px;margin:12px 0}
+.gen-media-choices{display:grid;gap:8px;max-height:255px;overflow:auto;padding-top:6px}
+.gen-media-choice{display:flex;align-items:center;gap:10px;border:1px solid #2e4559;background:#121f2d;border-radius:10px;padding:8px;color:var(--txt);min-width:0}
+.gen-media-choice input{width:18px;height:18px;accent-color:#6ae8ce;flex:none}
+.gen-media-choice span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;font-size:12px}
+.gen-media-choice small{color:var(--muted);font-size:10px;flex:none}
+.gen-compiled button{margin-top:7px}
+#genStatus{font-size:12px;line-height:1.6;overflow-wrap:anywhere}
+@media(max-width:520px){.gen-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#tab-generative .action-row>*{flex:1 1 155px}}
