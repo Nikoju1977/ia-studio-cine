@@ -131,7 +131,7 @@ function importFile(file){
   const item={id:id(),name:file.name,type,url:URL.createObjectURL(file),file,duration:type==='image'?4:5};
   const el=stageSource(item);
   if(type!=='image')el.onloadedmetadata=()=>{if(Number.isFinite(el.duration))item.duration=el.duration;};
-  state.media.push(item);renderLibrary();return item;
+  state.media.push(item);renderLibrary();refreshVfxSources();return item;
 }
 function setSoundtrack(item){state.soundtrack=item;setStatus('soundtrackName',item.name);toast('Bande-son sélectionnée : '+item.name);}
 function download(blob,filename){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),45000);}
@@ -222,8 +222,75 @@ async function runFilm(){
 function captureJSON(){return {format:'studio-niko-open-cinema',version:1,title:$('projectName').textContent,aspect:$('aspect').value,grade:state.grade,
   scenes:state.scenes.map(s=>({...s,filename:state.media.find(m=>m.id===s.mediaId)?.name})),board:state.board,
   warning:'Projet descriptif : les vidéos/images/sons ne sont pas intégrés au JSON. Réimporter les rushes avant de reprendre un montage manuel.'};}
+
+let vfxPlan=null,vfxJob=null,vfxTimer=null,vfxMaster=null;
+function refreshVfxSources(){
+  const select=$('vfxSource');if(!select)return;
+  const prev=select.value;select.replaceChildren(new Option('Choisir un rush vidéo',''));
+  for(const item of state.media.filter(m=>m.type==='video'&&m.file))select.add(new Option(item.name,item.id));
+  if([...select.options].some(o=>o.value===prev))select.value=prev;
+}
+async function refreshVfxCapabilities(){
+  const data=await api('/api/vfx/effects');
+  const available=Object.entries(data.effects).filter(([,value])=>value.installed).map(([,value])=>value.name);
+  $('vfxReadiness').textContent='GPU ComfyUI : '+(data.gpu?'connecté':'indisponible')+' · Workflows AI VFX : '+available.length+'/8 installés.'+
+    (available.length?' Disponibles : '+available.join(' · '):' Exporte tes graphes de modèles dans workflows/vfx/*.json sur le PC.');
+}
+async function vfxAnalyze(){
+  const prompt=$('vfxPrompt').value.trim();
+  vfxPlan=await api('/api/vfx/plan',{method:'POST',body:{effect:$('vfxEffect').value,prompt,
+    aspect:$('directorAspect').value,grade:$('directorGrade').value}});
+  $('vfxPlanDetails').textContent=vfxPlan.name+' · '+vfxPlan.model+' · '+vfxPlan.stages.join(' → ');
+  $('vfxExecute').disabled=false;setStatus('vfxStatus','Effet planifié ; génération IA réelle uniquement si le modèle est installé.');
+}
+async function vfxCreate(){
+  if(!vfxPlan)throw Error('Analyse d’abord le plan.');
+  const item=state.media.find(m=>m.id===$('vfxSource').value&&m.file&&m.type==='video');
+  if(!item)throw Error('Sélectionne une vidéo importée depuis ton téléphone ou PC.');
+  $('vfxExecute').disabled=true;setStatus('vfxStatus','Transfert du rush vers ton PC…');
+  if(!item.assetId){
+    const data=await api('/api/upload',{method:'POST',body:item.file,raw:true,
+      headers:{'Content-Type':'application/octet-stream','X-Filename':item.file.name}});
+    item.assetId=data.id;
+  }
+  const created=await api('/api/vfx/jobs',{method:'POST',body:{...vfxPlan,assetId:item.assetId}});
+  vfxJob=created.id;vfxMaster=null;
+  $('vfxCancel').disabled=false;$('vfxPreview').hidden=true;$('vfxAddToTimeline').disabled=true;
+  if(vfxTimer)clearInterval(vfxTimer);
+  vfxTimer=setInterval(()=>vfxPoll().catch(e=>setStatus('vfxStatus',e.message,true)),2500);
+  await vfxPoll();
+}
+async function vfxPoll(){
+  if(!vfxJob)return;
+  const data=await api('/api/vfx/jobs/'+vfxJob);
+  $('vfxProgress').value=data.progress;
+  setStatus('vfxStatus',data.step+' · '+data.progress+' %'+(data.error?' · '+data.error:''),data.status==='failed');
+  if(['completed','failed','cancelled'].includes(data.status)){
+    clearInterval(vfxTimer);vfxTimer=null;$('vfxCancel').disabled=true;$('vfxExecute').disabled=false;
+    if(data.status==='completed'&&data.qa?.pass){
+      vfxMaster={url:(state.server||location.origin)+data.master,duration:data.qa.seconds};
+      $('vfxPreview').hidden=false;$('vfxResult').src=vfxMaster.url;
+      $('vfxDownload').href=vfxMaster.url;
+      $('vfxAddToTimeline').disabled=false;
+      toast('VFX 4K encodé : contrôle technique réussi.');
+    }
+  }
+}
+function vfxAddTimeline(){
+  if(!vfxMaster)return;
+  const item={id:id(),name:'AI VFX 4K · '+vfxPlan.name,type:'video',url:vfxMaster.url,duration:vfxMaster.duration};
+  state.media.push(item);renderLibrary();addScene(item);tab('media');
+  toast('Plan AI VFX ajouté au montage.');
+}
+
 function bind(){
-  document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
+  document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{tab(b.dataset.tab);if(b.dataset.tab==='vfx')refreshVfxCapabilities().catch(e=>setStatus('vfxReadiness',e.message,true));});
+  $('vfxPlan').onclick=()=>vfxAnalyze().catch(e=>setStatus('vfxStatus',e.message,true));
+  $('vfxExecute').onclick=()=>vfxCreate().catch(e=>{$('vfxExecute').disabled=false;setStatus('vfxStatus',e.message,true);});
+  $('vfxCancel').onclick=()=>{if(vfxJob)api('/api/vfx/jobs/'+vfxJob+'/cancel',{method:'POST'}).catch(e=>setStatus('vfxStatus',e.message,true));};
+  $('vfxAddToTimeline').onclick=vfxAddTimeline;
+  $('vfxPrompt').oninput=()=>{vfxPlan=null;$('vfxExecute').disabled=true;};
+  $('vfxEffect').onchange=()=>{vfxPlan=null;$('vfxExecute').disabled=true;};
   document.querySelectorAll('[data-prompt]').forEach(b=>b.onclick=()=>{$('prompt').value=b.dataset.prompt;});
   $('settingsButton').onclick=()=>$('settingsDialog').showModal();
   $('saveSettings').onclick=e=>{e.preventDefault();const input=$('backendUrl').value.trim();
@@ -265,7 +332,7 @@ function bind(){
   $('generate').onclick=()=>{$('filmPrompt').value=$('prompt').value;$('directorEngine').value=$('aiType').value==='image'?'comfy-image':'comfy-video';$('shotCount').value='3';tab('director');planFilm().catch(e=>setStatus('directorStatus',e.message,true));};
   $('checkJob').onclick=()=>pollJob();
 }
-async function initialize(){bind();updatePreviewStyle();renderLibrary();updateStage();
+async function initialize(){bind();updatePreviewStyle();renderLibrary();refreshVfxSources();updateStage();
   if('serviceWorker'in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
   try{const result=await connect();if(!result.authorized){$('settingsDialog').showModal();}}catch{setStatus('directorStatus','Serveur indisponible. Démarre le serveur Node pour accéder au rendu 4K.',true);}
 }

@@ -24,7 +24,7 @@ export function validateOptions(o){
   const aspect=OUTPUTS[o.aspect] ? o.aspect : '16:9';
   const count=between(Math.trunc(Number(o.shotCount)||4),1,12);
   const seconds=between(Math.trunc(Number(o.shotSeconds)||4),2,12);
-  const engine=['procedural','comfy-image','comfy-video'].includes(o.engine)?o.engine:'procedural';
+  const engine=['procedural','comfy-image','comfy-video','agnes-video-flash','agnes-image-flash'].includes(o.engine)?o.engine:'procedural';
   const grade=['cinema','techno','nature','noir'].includes(o.grade)?o.grade:'cinema';
   const soundtrackId=typeof o.soundtrackId==='string' && /^[0-9a-f-]{36}$/.test(o.soundtrackId) ? o.soundtrackId : null;
   return {prompt,aspect,count,seconds,engine,grade,soundtrackId};
@@ -45,7 +45,7 @@ export function makeStoryboard(input){
 }
 export function validateStoryboard(body){
   if(!body||!OUTPUTS[body.aspect]||!Array.isArray(body.shots)||body.shots.length<1||body.shots.length>12) throw new Error('Storyboard invalide (1 à 12 plans, cadre valide).');
-  const engine=['procedural','comfy-image','comfy-video'].includes(body.engine)?body.engine:'procedural';
+  const engine=['procedural','comfy-image','comfy-video','agnes-video-flash','agnes-image-flash'].includes(body.engine)?body.engine:'procedural';
   const grade=['cinema','techno','nature','noir'].includes(body.grade)?body.grade:'cinema';
   const soundtrackId=typeof body.soundtrackId==='string'&&/^[0-9a-f-]{36}$/.test(body.soundtrackId)?body.soundtrackId:null;
   return {version:1,title:titleFor(body.title||'Film'),aspect:body.aspect,grade,engine,soundtrackId,shots:body.shots.map((c,i)=>{

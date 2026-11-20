@@ -6,6 +6,8 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {makeStoryboard,validateStoryboard,proceduralFrame,buildShot,concatShots,masterAudio,inspectMedia,verifyMaster,runProcess} from './engine.mjs';
 import {comfyStatus,generateComfy} from './comfy.mjs';
+import {planEffect,vfxCapabilities,executeVfx} from './vfx.mjs';
+import {agnesKeyStatus,appendAgnesKeys,clearAgnesKeys,agnesEnabled,assertAgnesAllowed,generateAgnes} from './agnes.mjs';
 
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const WEB=path.join(ROOT,'web');
@@ -17,6 +19,7 @@ const HOST=process.env.STUDIO_HOST||'127.0.0.1';
 const PORT=Number(process.env.PORT||8787);
 const PASSWORD=process.env.STUDIO_TOKEN||'';
 const jobs=new Map();
+const vfxJobs=new Map();
 const sessions=new Set();
 const MAX_UPLOAD=250*1024*1024;
 const MIME={'.html':'text/html','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.json':'application/json','.webmanifest':'application/manifest+json','.ico':'image/x-icon','.mp4':'video/mp4','.webm':'video/webm','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.wav':'audio/wav','.mp3':'audio/mpeg','.ogg':'audio/ogg'};
@@ -68,6 +71,10 @@ async function runJob(job,signal){
       let source,kind='image';
       if(board.engine==='procedural'){
         source=base+'.png';await proceduralFrame(source,shot,board.aspect,board.grade);
+      }else if(board.engine.startsWith('agnes-')){
+        job.step=`Plan ${i+1}/${board.shots.length} · Agnes AI Flash`;
+        const generated=await generateAgnes({mode:board.engine,shot,aspect:board.aspect,output:base,signal,onProgress:message=>{job.step=message;}});
+        source=generated.file;kind=generated.kind;
       }else{
         job.step=`Plan ${i+1}/${board.shots.length} · GPU ComfyUI`;
         const generated=await generateComfy({mode:board.engine,shot,aspect:board.aspect,output:base,signal,workflowRoot:WORKFLOWS,onProgress:message=>{job.step=message;}});
@@ -93,6 +100,22 @@ async function runJob(job,signal){
   }catch(err){job.status=signal.aborted?'cancelled':'failed';job.step=job.status==='cancelled'?'Rendu arrêté':'Erreur de production';job.error=String(err.message||err).slice(0,900);}
   finally{await writeFile(path.join(folder,'progress.json'),JSON.stringify(jobPublic(job),null,2)).catch(()=>{});job.controller=null;}
 }
+const vfxPublic=j=>({id:j.id,status:j.status,step:j.step,progress:j.progress,effect:j.plan.effect,error:j.error||null,
+  qa:j.qa||null,master:j.master?'/api/vfx/jobs/'+j.id+'/master':null,plan:j.plan});
+async function runVfxJob(job,signal){
+  const folder=path.join(JOBDIR,'vfx-'+job.id);await mkdir(folder,{recursive:true});
+  try{
+    job.status='running';job.progress=3;job.step='Inspection du rush';
+    const source=await findAsset(job.assetId);
+    const result=await executeVfx({source,effect:job.plan.effect,prompt:job.plan.prompt,aspect:job.plan.aspect,
+      grade:job.plan.grade,output:path.join(folder,'niko-vfx'),workflowRoot:WORKFLOWS,signal,
+      onProgress:stage=>{job.step=stage;job.progress=Math.min(94,job.progress+5);}});
+    job.master=result.file;job.qa=result.qa;job.status='completed';job.progress=100;
+    job.step='AI VFX terminé — conformation 4K vérifiée';
+  }catch(e){job.status=signal.aborted?'cancelled':'failed';job.error=String(e?.message||e).slice(0,950);
+    job.step=signal.aborted?'Annulé':'Échec AI VFX — aucun faux rendu';}
+  finally{job.controller=null;await writeFile(path.join(folder,'progress.json'),JSON.stringify(vfxPublic(job),null,2)).catch(()=>{});}
+}
 async function findAsset(id){if(!/^[0-9a-f-]{36}$/.test(id))throw error(400,'ID fichier invalide'); const list=await readdir(ASSETS);const match=list.find(n=>n.startsWith(id+'.'));if(!match)throw error(404,'Média introuvable');return path.join(ASSETS,match);}
 async function upload(req,res){
   const length=Number(req.headers['content-length']);if(!Number.isSafeInteger(length)||length<1||length>MAX_UPLOAD)throw error(413,'Fichier trop volumineux ou taille absente (250 Mo max)');
@@ -107,7 +130,7 @@ async function route(req,res){
   if(pathName==='/api/health'&&req.method==='GET'){
     const ffmpeg=await new Promise(resolve=>{runProcess('ffmpeg',['-version'],{timeoutMs:4000}).then(()=>resolve(true),()=>resolve(false));});
     const comfy=await comfyStatus();
-    return json(res,200,{app:'Studio Niko Open Cinema',version:'0.1.0',ffmpeg,comfy:comfy.available,workflows:'export API requis',resolution:'4K',authentication:!!PASSWORD,authorized:authorized(req)});
+    return json(res,200,{app:'Studio Niko Open Cinema',version:'0.2.0',ffmpeg,comfy:comfy.available,workflows:'export API requis',resolution:'4K',agnes:{enabled:agnesEnabled(),...agnesKeyStatus()},authentication:!!PASSWORD,authorized:authorized(req)});
   }
   if(pathName==='/api/session'&&req.method==='POST'){
     if(!PASSWORD&&!localRequest(req))throw error(403,'Définissez STUDIO_TOKEN pour l’accès depuis un autre appareil');
@@ -118,15 +141,59 @@ async function route(req,res){
     return json(res,200,{ok:true});
   }
   if(pathName.startsWith('/api/')&&!authorized(req))throw error(401,'Connexion requise : configurez le code du serveur');
+  if(pathName==='/api/agnes/keys'&&req.method==='GET')return json(res,200,agnesKeyStatus());
+  if(pathName==='/api/agnes/keys'&&req.method==='DELETE')return json(res,200,clearAgnesKeys());
+  if(pathName==='/api/agnes/keys'&&req.method==='POST'){
+    // Passwords or API keys must not travel over unencrypted mobile/LAN connections.
+    if(!localRequest(req)&&!req.socket.encrypted)throw error(403,'Ajoutez les clés sur le PC ou utilisez un accès HTTPS chiffré.');
+    const b=await bodyJSON(req);
+    return json(res,200,appendAgnesKeys(b.keys));
+  }
+  if(pathName==='/api/vfx/effects'&&req.method==='GET'){
+    const effects=await vfxCapabilities(WORKFLOWS);
+    const comfy=await comfyStatus();return json(res,200,{effects,gpu:comfy.available,detail:comfy.detail||null});
+  }
+  if(pathName==='/api/vfx/plan'&&req.method==='POST')return json(res,200,planEffect(await bodyJSON(req)));
+  if(pathName==='/api/vfx/jobs'&&req.method==='POST'){
+    if([...jobs.values(),...vfxJobs.values()].some(j=>['running','queued'].includes(j.status)))
+      throw error(409,'Un rendu est déjà en cours : GPU réservé.');
+    const body=await bodyJSON(req);
+    const plan=planEffect(body);
+    const capabilities=await vfxCapabilities(WORKFLOWS);
+    if(!capabilities[plan.effect].installed)throw error(409,'Workflow '+plan.effect+' absent. Importez un véritable workflow IA dans workflows/vfx/.');
+    if(!(await comfyStatus()).available)throw error(409,'GPU ComfyUI non connecté. Aucune simulation ne sera réalisée.');
+    const assetId=String(body.assetId||'');
+    const source=await findAsset(assetId);
+    const info=await inspectMedia(source);
+    if(!info.streams?.some(v=>v.codec_type==='video'))throw error(415,'Un rush vidéo est obligatoire.');
+    const id=randomUUID(),controller=new AbortController();
+    const job={id,assetId,plan,status:'queued',step:'En attente',progress:0,controller,error:null,qa:null,master:null};
+    vfxJobs.set(id,job);void runVfxJob(job,controller.signal);
+    return json(res,202,vfxPublic(job));
+  }
+  const vfxId=/^\/api\/vfx\/jobs\/([a-f0-9-]{36})(?:\/(master|cancel))?$/.exec(pathName);
+  if(vfxId){
+    const j=vfxJobs.get(vfxId[1]);if(!j)throw error(404,'Job VFX inconnu ou serveur redémarré');
+    if(!vfxId[2]&&req.method==='GET')return json(res,200,vfxPublic(j));
+    if(vfxId[2]==='cancel'&&req.method==='POST'){j.controller?.abort();return json(res,200,{ok:true,status:j.status});}
+    if(vfxId[2]==='master'&&req.method==='GET'){
+      if(!j.master||j.status!=='completed')throw error(409,'Master VFX indisponible');
+      return serveFile(req,res,j.master,'video/mp4');
+    }
+  }
   if(pathName==='/api/plan'&&req.method==='POST'){return json(res,200,makeStoryboard(await bodyJSON(req)));}
   if(pathName==='/api/upload'&&req.method==='POST')return upload(req,res);
   const asset=/^\/api\/assets\/([a-f0-9-]{36})$/.exec(pathName);
   if(asset&&req.method==='GET')return serveFile(req,res,await findAsset(asset[1]));
   if(pathName==='/api/jobs'&&req.method==='POST'){
-    if([...jobs.values()].some(j=>j.status==='running'||j.status==='queued'))throw error(409,'Un rendu est déjà en cours. Un seul job simultané pour préserver le GPU.');
+    if([...jobs.values(),...vfxJobs.values()].some(j=>j.status==='running'||j.status==='queued'))throw error(409,'Un rendu est déjà en cours. Un seul job simultané pour préserver le GPU.');
     const b=await bodyJSON(req);
     const board=validateStoryboard(b.storyboard||b);
-    if(board.engine!=='procedural'&&!process.env.COMFY_URL)throw error(409,'COMFY_URL non configuré : génération IA locale impossible.');
+    if(board.engine.startsWith('comfy-')&&!process.env.COMFY_URL)throw error(409,'COMFY_URL non configuré : génération IA locale impossible.');
+    if(board.engine.startsWith('agnes-')){
+      if(!b.agnesFreeConsent)throw error(403,'Confirmez d’abord avoir vérifié le tarif Flash gratuit sur Agnes. Aucun passage automatique à un modèle payant.');
+      for(const shot of board.shots)assertAgnesAllowed(board.engine,board.aspect,shot.duration,b.agnesFreeConsent);
+    }
     if(board.soundtrackId)await findAsset(board.soundtrackId);
     const id=randomUUID();const controller=new AbortController();
     const job={id,status:'queued',step:'Préparation',progress:0,error:null,createdAt:new Date().toISOString(),storyboard:board,shots:[],controller};

@@ -59,3 +59,11 @@ Le PC assure **génération IA + rendu 4K**. Le téléphone pilote les plans, le
 ## Tests et transparence
 
 `npm test` vérifie le découpage, le parsing des workflows, les profils 4K et l'intégrité des images. `npm run check` valide la syntaxe. Les tests FFmpeg / rendu réel nécessitent les binaires disponibles localement ; voir `test/integration` pour les validations complémentaires. Ne jamais qualifier une fonctionnalité de validée sur Android ou une génération ComfyUI réelle sans essai sur le matériel et les modèles concernés.
+
+## 0.2 — AI VFX LAB (modèles spécialisés, optionnels)
+
+Le nouvel onglet **AI VFX LAB** traite un vrai rush vidéo via ComfyUI, sur PC et depuis une interface mobile. Il inclut le routage d'intention, huit effets spécialisés (VOID/SAM3, VACE/LTX, SeedVR2, Depth Anything), le transfert contrôlé des sources, la progression GPU, la conformation 4K, le contrôle FFprobe, un aperçu et l'ajout du résultat à la timeline.
+
+**Aucune intelligence artificielle n'est imitée :** pour activer un effet, il faut exporter son vrai workflow ComfyUI au format API dans `workflows/vfx/` et installer ses poids (voir [workflows/vfx/README.md](workflows/vfx/README.md)). Sans modèle, l'application explique ce qui manque. L'onglet respecte les limites des formats et des 15 secondes par clip pour cette première implémentation.
+
+Les modèles les plus récents ne garantissent pas la meilleure qualité sur chaque plan. La certification 4K est une validation des paramètres de fichier et non de son piqué réel, de la cohérence d'un personnage ou de la qualité artistique. Aucune revendication de supériorité universelle n'est faite sans benchmark.
