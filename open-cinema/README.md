@@ -1,6 +1,10 @@
-# STUDIO NIKO — OPEN CINEMA AI · Cinema Engine 0.1
+# STUDIO NIKO — OPEN CINEMA AI · Cinema Engine 0.3
 
 **Application PC + mobile pour préparer un film, créer un storyboard, générer des plans avec des modèles locaux ComfyUI et rendre un master réel en 4K avec FFmpeg.** Licence MIT pour le code original du Studio. Les modèles IA et les logiciels tiers conservent leurs licences propres.
+
+## Suite générative avec import multi-médias
+
+Voir [le guide de la Generative Suite](docs/GENERATIVE-SUITE.md) : prompts, caméra, objectif, éclairage, médias de référence, storyboard modifiable, AI VFX, ComfyUI et sortie 4K. Pour assembler les rushes sans génération, choisir **Réaliser avec mes rushes importés**. Pour les plans IA, connecter un ComfyUI et installer les poids compatibles.
 
 ## Démarrage sans abonnement
 
