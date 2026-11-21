@@ -46,50 +46,6 @@ function parseSsePacket(packet) {
   try { value=JSON.parse(payload); } catch {}
   return {type,value};
 }
-async function awaitJob(eventId, signal, onProgress) {
-  if (!/^[\w-]{5,128}$/.test(String(eventId)))
-    throw new Error('Identifiant de tâche Gradio invalide.');
-  let response;
-  try {
-    response=await fetch(API+'/call/text_to_video/'+eventId,{
-      method:'GET',mode:'cors',credentials:'omit',signal,
-      headers:{Accept:'text/event-stream'}
-    });
-  } catch (err) { failNetwork(err,'suivi de tâche'); }
-  if (!response.ok) throw new Error('Impossible de suivre la génération LTX (HTTP '+response.status+').');
-  if (!response.body?.getReader) throw new Error('Ce navigateur ne prend pas en charge le suivi des tâches LTX.');
-  const reader=response.body.getReader();
-  const decoder=new TextDecoder();
-  let buffer='';
-  let complete=false;
-  try {
-    while (true) {
-      const {value,done}=await reader.read();
-      if (done) break;
-      buffer+=decoder.decode(value,{stream:true}).replace(/\r\n/g,'\n');
-      if (buffer.length>2000000) throw new Error('Réponse du service LTX trop volumineuse.');
-      let sep;
-      while ((sep=buffer.indexOf('\n\n'))>=0) {
-        const packet=parseSsePacket(buffer.slice(0,sep));
-        buffer=buffer.slice(sep+2);
-        if (!packet) continue;
-        if (packet.type==='complete') {
-          complete=true;
-          return videoURL(packet.value);
-        }
-        if (packet.type==='error') {
-          const detail=typeof packet.value==='string'?packet.value:packet.value?.message||JSON.stringify(packet.value);
-          throw new Error('Génération LTX refusée ou interrompue : '+String(detail).slice(0,220));
-        }
-        if (packet.type==='generating') onProgress?.('LTX : génération IA en cours sur GPU partagé…');
-        if (packet.type==='heartbeat') continue;
-        if (packet.type==='progress') onProgress?.('LTX : calcul des images et mouvements…');
-      }
-    }
-  } catch (err) { failNetwork(err,'réception de la vidéo'); }
-  finally { reader.releaseLock(); }
-  if (!complete) throw new Error('Connexion au Space interrompue avant réception de la vidéo. Aucune vidéo ne sera inventée.');
-}
 async function uploadImage(sourceUrl, signal) {
   let response;
   try { response=await fetch(sourceUrl,{signal}); }
@@ -99,7 +55,7 @@ async function uploadImage(sourceUrl, signal) {
   if (!blob.type.startsWith('image/')) throw new Error('Sélectionnez une image JPG, PNG ou WebP.');
   if (blob.size>6500000) throw new Error('Image de départ supérieure à 6,5 Mo : réduisez-la.');
   const form=new FormData();
-  form.append('files',blob,'studio-niko-image.'+(blob.type.includes('png')?'png':'jpg'));
+  form.append('files',blob,'studio-niko-image.'+(blob.type.includes('png')?'png':blob.type.includes('webp')?'webp':'jpg'));
   const files=await jsonOrThrow(API+'/upload',{method:'POST',signal,body:form},'import de l’image');
   const path=Array.isArray(files)?files[0]:files?.files?.[0];
   if (!path||typeof path!=='string') throw new Error('Le Space n’a pas accepté l’image envoyée.');
