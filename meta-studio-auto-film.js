@@ -117,6 +117,43 @@ async function verifyVideo(url,signal) {
     video.src=url;video.load();
   });
 }
+async function extractLastFrame(url, duration, signal){
+  // The preceding video must already be copied to a same-origin blob URL.
+  return new Promise((resolve,reject)=>{
+    const v=document.createElement('video');
+    let finished=false;
+    const timer=setTimeout(()=>done(new Error('Impossible d’extraire la dernière image.')),14000);
+    const abort=()=>done(new DOMException('Annulé','AbortError'));
+    const done=(error,result)=>{
+      if(finished)return;finished=true;clearTimeout(timer);
+      signal?.removeEventListener('abort',abort);
+      v.onloadedmetadata=null;v.onseeked=null;v.onerror=null;
+      v.removeAttribute('src');v.load();
+      error?reject(error):resolve(result);
+    };
+    signal?.addEventListener('abort',abort,{once:true});
+    v.muted=true;v.playsInline=true;v.preload='auto';
+    v.onloadedmetadata=()=>{
+      try{v.currentTime=Math.max(.04,Math.min((v.duration||duration)-.15,duration-.15));}
+      catch(e){done(e);}
+    };
+    v.onseeked=()=>{
+      try{
+        const w=Math.min(1024,v.videoWidth||1024);
+        const h=Math.max(32,Math.round(w*(v.videoHeight||576)/(v.videoWidth||1024)));
+        const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+        const ctx=canvas.getContext('2d',{alpha:false});
+        ctx.drawImage(v,0,0,w,h);
+        canvas.toBlob(blob=>{
+          if(!blob||!blob.size)return done(new Error('Image extraite vide.'));
+          done(null,URL.createObjectURL(blob));
+        },'image/jpeg',.91);
+      }catch(error){done(error);}
+    };
+    v.onerror=()=>done(new Error('La dernière image n’est pas décodable.'));
+    v.src=url;v.load();
+  });
+}
 async function localCopyOrOriginal(url,signal){
   // Blob URL prevents cross-origin canvas tainting on finished film render.
   // If CORS forbids copying, retain genuine URL for preview, but warn on export.
@@ -138,7 +175,7 @@ async function renderProject(){
   return new Promise((resolve,reject)=>{
     let delivered=false;
     const timer=setTimeout(()=>{
-      if(!delivered){delivered=true;reject(new Error('Le moteur d’export n’a pas répondu.'));}},10000);
+      if(!delivered){delivered=true;reject(new Error('Le moteur d’export n’a pas répondu.'));}},960000);
     document.dispatchEvent(new CustomEvent('studio:request-auto-export',{detail:{
       resolve:()=>{if(delivered)return;delivered=true;clearTimeout(timer);resolve();},
       reject:e=>{if(delivered)return;delivered=true;clearTimeout(timer);reject(e);}
@@ -159,6 +196,7 @@ async function execute() {
   state.busy=true;state.controller=controller;
   cleanControls(true);
   const {shots,engine,ratio,quality}=production;
+  let previousFrame=production.lastFrame||production.initialSource||null;
   try {
     for(const shot of shots) {
       if(shot.phase==='done')continue;
@@ -167,6 +205,7 @@ async function execute() {
       stepStatus('Plan '+(shot.index+1)+'/'+shots.length+' · '+shot.title+' · '+qualityLabel(engine));
       const result=await generateCinemaShot({
         prompt:shot.prompt,engine,ratio,seconds:shot.seconds,quality,signal,
+        sourceUrl:$('auto-chain').checked?previousFrame:production.initialSource,
         onProgress:msg=>{
           $('auto-state').textContent='Plan '+(shot.index+1)+'/'+shots.length+' · '+msg;
           status(msg);
@@ -179,6 +218,18 @@ async function execute() {
       document.dispatchEvent(new CustomEvent('studio:add-clip',{detail:item}));
       shot.phase='done';shot.video=item.id;shot.quality=qualityCheck;
       shot.downloadable=media.downloadable;
+      if($('auto-chain').checked && media.downloadable){
+        try {
+          const next=await extractLastFrame(media.url,qualityCheck.duration,signal);
+          if(production.lastFrame?.startsWith('blob:'))URL.revokeObjectURL(production.lastFrame);
+          production.lastFrame=next;previousFrame=next;
+          log('Continuité : dernière image du plan '+(shot.index+1)+' récupérée.','success');
+        }catch(e){
+          if(isAbort(e))throw e;
+          previousFrame=production.initialSource||null;
+          log('Continuité visuelle partielle : '+e.message,'error');
+        }
+      }
       updateUI();
       log('Plan '+(shot.index+1)+' reçu : '+qualityCheck.width+'×'+qualityCheck.height+
         ' · '+qualityCheck.duration.toFixed(1)+' s', 'success');
@@ -211,7 +262,11 @@ function prepare(){
       const engine=$('auto-engine').value;
       if(!['ltx23','huggingface'].includes(engine))throw new Error('Seuls les GPU gratuits sont autorisés en réalisation automatique.');
       const shots=storyboard({idea,style:$('auto-style').value,shotCount:Number($('auto-shots').value),shotSeconds:Number($('auto-shot-seconds').value)});
-      production={idea,shots,engine,ratio:$('aspect').value,quality:$('auto-quality').value};
+      if(production?.lastFrame?.startsWith('blob:'))URL.revokeObjectURL(production.lastFrame);
+      const selected=$('video-source').value;
+      const source=state.results.find(r=>r.id===selected && r.type==='image');
+      production={idea,shots,engine,ratio:$('aspect').value,quality:$('auto-quality').value,
+        initialSource:source?.url||null,lastFrame:null};
       $('auto-resume').disabled=true;updateUI();
       stepStatus('Storyboard professionnel calculé : '+shots.length+' plans, '+shots.length*shots[0].seconds+' secondes environ. Lancement GPU…');
       await execute();
