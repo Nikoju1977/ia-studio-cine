@@ -431,7 +431,7 @@ async function exportZip(){
   download(blob,'meta-studio-v5.zip');
   if(failures.length)log(failures.length+' média(s) manquants dans le ZIP.','error');
 }
-async function exportMovie(){
+async function exportMovie(auto=false){
   if(movieController)throw new Error('Un rendu est déjà en cours.');
   if(!movieSupport())throw new Error('Export vidéo non pris en charge par ce navigateur.');
   pause();
@@ -445,7 +445,7 @@ async function exportMovie(){
       music:Number($('vol-music').value)/100,ambience:Number($('vol-ambience').value)/100};
     const result=await makeTimelineMovie({
       clips:JSON.parse(JSON.stringify(project.clips)),results:state.results,volumes,width,
-      height:Math.round(width*9/16),fps:FPS,signal:controller.signal,
+      height:Math.round(width*9/16),fps:FPS,signal:controller.signal,trimToVideo:auto,
       onProgress:(percent,phase)=>{
         $('render-progress').value=percent;
         $('render-state').textContent=phase+' · '+percent+' %';
@@ -552,7 +552,7 @@ function init(){
     log('Nouveau film autonome : pistes vidéo et titres réinitialisés, pistes audio conservées.','success');
   });
   document.addEventListener('studio:request-auto-export',e=>{
-    exportMovie().then(()=>e.detail?.resolve?.(),error=>e.detail?.reject?.(error));
+    exportMovie(true).then(()=>e.detail?.resolve?.(),error=>e.detail?.reject?.(error));
   });
   document.addEventListener('keydown',e=>{
     if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName))return;
