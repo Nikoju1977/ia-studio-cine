@@ -68,12 +68,12 @@ function active(clips,t){return [...clips].reverse().find(c=>t>=c.start&&t<c.sta
 function report(callback,percent,stage){if(typeof callback==='function')callback(Math.round(percent),stage);}
 
 export async function makeTimelineMovie({clips,results,volumes={},width=1280,height=720,
-  fps=24,signal,onProgress}){
+  fps=24,signal,onProgress,trimToVideo=false}){
   const mime=movieSupport();
   if(!mime)throw new Error('Ce navigateur ne sait pas enregistrer la timeline (MediaRecorder/captureStream).');
   if(![1280,1920].includes(width)||!Number.isFinite(height)||height!==Math.round(width*9/16))
     throw new Error('Résolution de rendu invalide.');
-  const duration=movieDuration(clips);
+  const duration=trimToVideo?Math.max(0,...(clips.video||[]).map(c=>c.start+c.duration)):movieDuration(clips);
   if(!clips.video?.length)throw new Error('Ajoutez au moins un plan vidéo ou une image à V1.');
   if(!(duration>0&&duration<=900))throw new Error('Durée de rendu limitée à 15 min par export.');
   if(signal?.aborted)throw new DOMException('Export annulé','AbortError');
@@ -112,7 +112,7 @@ export async function makeTimelineMovie({clips,results,volumes={},width=1280,hei
       gain.gain.value=kind==='video'?1:Math.max(0,Math.min(1,Number(volumes[clip.kind]??.5)));
       const input=context.createMediaElementSource(element);
       input.connect(gain);gain.connect(destination);
-      audioNodes.push({input,gain});
+      audioNodes.push({input,gain,kind,clip});
       element.muted=false; // audio plays only into the recording destination, not the speakers
     }
     await context.resume();
@@ -175,6 +175,12 @@ export async function makeTimelineMovie({clips,results,volumes={},width=1280,hei
           if(kind==='image')continue;
           const selected=kind==='video'?visible?.id===clip.id:t>=clip.start&&t<clip.start+clip.duration;
           syncElement(element,clip,t,selected);
+        }
+        for(const node of audioNodes){
+          if(node.kind!=='video')continue;
+          const started=t-node.clip.start,remaining=node.clip.start+node.clip.duration-t;
+          const fade=Math.max(0,Math.min(1,started/.14,remaining/.14));
+          node.gain.gain.setTargetAtTime(fade,context.currentTime,.015);
         }
         draw(t);
         report(onProgress,12+88*t/duration,'Encodage temps réel');
