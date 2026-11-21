@@ -1,5 +1,5 @@
 /* META-STUDIO PRO V5 — timeline, looks, local tools, audio & interchange */
-import { $, uid, state, addResult, log, notify, status, generate } from './meta-studio-v5-core.js';
+import { $, uid, state, addResult, log, notify, status, generate } from './meta-studio-v5-core.js?v=5.3';
 import { makeTimelineMovie, movieSupport } from './meta-studio-v5-render.js';
 const FPS=24;
 const $all=(q)=>Array.from(document.querySelectorAll(q));
