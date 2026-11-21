@@ -1,6 +1,6 @@
 /* META-STUDIO PRO V5 — timeline, looks, local tools, audio & interchange */
-import { $, uid, state, addResult, log, notify, status, generate } from './meta-studio-v5-core.js?v=5.3';
-import { makeTimelineMovie, movieSupport } from './meta-studio-v5-render.js';
+import { $, uid, state, addResult, log, notify, status, generate } from './meta-studio-v5-core.js?v=6';
+import { makeTimelineMovie, movieSupport } from './meta-studio-v5-render.js?v=6';
 const FPS=24;
 const $all=(q)=>Array.from(document.querySelectorAll(q));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -402,7 +402,7 @@ function extFromMime(mime,url,type){
 }
 async function sourceBlob(r){
   const res=await fetch(r.url);
-  if(!res.ok)throw new Error('Média inaccessible ('+res.status+'). URL Agnes peut avoir expiré.');
+  if(!res.ok)throw new Error('Média inaccessible ('+res.status+'). L’URL temporaire du fournisseur peut avoir expiré.');
   return {blob:await res.blob(),mime:res.headers.get('Content-Type')||r.mime};
 }
 async function downloadOriginal(r){
@@ -525,7 +525,7 @@ async function agent(command){
       $('generation-mode').value=video?'video':'image';
       $('generation-mode').dispatchEvent(new Event('change'));
       $('prompt').value=p;
-      agentMessage('Commande envoyée au moteur Agnes (si une clé est disponible).');
+      agentMessage('Commande envoyée au moteur de production sélectionné.');
       await generate();
     }else if(cmd.startsWith('parler :')){
       const speech=command.slice(command.indexOf(':')+1).trim();speak(speech);agentMessage('Synthèse vocale lancée.');
@@ -546,6 +546,9 @@ function bindAsync(id,cb){
 }
 function init(){
   document.addEventListener('studio:add-clip',e=>appendMedia(e.detail));
+  document.addEventListener('studio:request-auto-export',e=>{
+    exportMovie().then(()=>e.detail?.resolve?.(),error=>e.detail?.reject?.(error));
+  });
   document.addEventListener('keydown',e=>{
     if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName))return;
     if(e.code==='Space'){e.preventDefault();play();}
