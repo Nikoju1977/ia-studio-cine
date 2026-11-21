@@ -1,5 +1,5 @@
 /* META-STUDIO PRO V5.3 — core, no secrets on disk */
-import {generateFreeVideo} from "./meta-studio-free-video.js";
+import {generateFreeVideo} from "./meta-studio-free-video.js?v=5.3";
 export const $ = id => document.getElementById(id);
 export const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2));
 export const state = { results: [], busy: false, controller: null, onResult: null };
