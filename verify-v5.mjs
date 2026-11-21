@@ -11,7 +11,7 @@ assert.match(html,/<title>META-STUDIO PRO V5/);
 assert.match(html,/value="huggingface" selected/);
 assert.match(core,/import \{generateFreeVideo\} from "\.\/meta-studio-free-video\.js"/);
 assert.match(free,/lightricks-ltx-video-distilled\.hf\.space/);
-assert.match(free,/call\/\+endpoint/);
+assert.match(free,/const endpoint=image/);
 assert.match(free,/text-to-video/);
 assert.match(free,/image-to-video/);
 assert.doesNotMatch(free,/sk_[A-Za-z0-9]{20,}/);
