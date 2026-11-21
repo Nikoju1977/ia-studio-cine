@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#090b11">
 <meta name="description" content="META-STUDIO PRO V6 — atelier de création cinéma, Agnes AI, montage, couleur et audio dans le navigateur.">
 <title>META-STUDIO PRO V6 — Réalisateur IA Autonome</title>
-<link rel="stylesheet" href="./meta-studio-v5.css">
+<link rel="stylesheet" href="./meta-studio-v5.css?v=6">
 <script type="module" src="./meta-studio-v5-media.js?v=6"></script>
 <script type="module" src="./meta-studio-auto-film.js?v=6"></script>
 </head>
@@ -43,6 +43,7 @@
   <div><label class="form-label" for="auto-shot-seconds">Durée de chaque plan</label><select id="auto-shot-seconds"><option value="3">3 secondes</option><option value="4" selected>4 secondes</option><option value="5">5 secondes</option><option value="6">6 secondes</option></select></div>
   <div><label class="form-label" for="auto-quality">Qualité de calcul</label><select id="auto-quality"><option value="high" selected>Haute · qualité cinéma disponible</option><option value="balanced">Équilibrée · GPU plus léger</option></select></div>
 </div>
+<p class="info">Nouvelle production : réinitialisation des plans vidéo et des titres ; la piste musique importée est conservée. Choisis une image de départ dans la section Production si nécessaire.</p>
 <label class="auto-check"><input id="auto-chain" type="checkbox" checked> Enchaîner les plans en utilisant la dernière image du précédent comme référence (si le MP4 est accessible)</label>
 <label class="auto-check"><input id="auto-export" type="checkbox" checked> Monter et exporter automatiquement le film lorsque tous les plans sont générés</label>
 <p id="auto-estimate" class="info"></p>
@@ -288,12 +289,12 @@
   <section class="sn-guide-sheet" aria-labelledby="studio-niko-guide-title">
     <span class="sn-guide-caption">STUDIO NIKO / GUIDE INTÉGRÉ</span>
     <h2 id="studio-niko-guide-title">ia-studio-cine</h2>
-    <p>META-STUDIO PRO V5 : création audiovisuelle, timeline, looks et exports.</p>
+    <p>META-STUDIO PRO V6 : réalisation autonome, génération IA gratuite sous quota, montage et exports.</p>
     <h3>Premiers pas</h3>
     <ol><li>Importez vos images, vidéos ou sons dans la médiathèque.</li><li>Ajoutez les éléments à la timeline et ajustez les pistes et looks disponibles.</li><li>Exportez le film assemblé dans Exports (WebM ou MP4 selon le navigateur), ou exportez sa structure en JSON/EDL/OTIO/FCPXML.</li></ol>
     <h3>Avant de commencer</h3>
     <p>Prévoyez de l&#39;espace mémoire et vérifiez l&#39;état de votre projet avant fermeture.</p>
-    <div class="sn-guide-warning" role="note">V5.3 : pour une vraie vidéo IA gratuite sans clé Agnes, choisissez LTX Video dans Production. Hugging Face limite l'utilisation gratuite quotidienne et peut refuser ou retarder les tâches. Si Agnes est saturé, sélectionnez manuellement LTX. Aucune génération payante ne sera lancée automatiquement.</div>
+    <div class="sn-guide-warning" role="note">V6 : le réalisateur autonome utilise LTX-2.3 22B avec audio sur GPU partagé, soumis à un quota quotidien. Si le Space est indisponible ou si CORS bloque, aucun faux résultat ne sera créé. Reprenez les plans manquants manuellement ; aucune génération payante ne sera lancée.</div>
     <h3>En cas de problème</h3>
     <p>En cas de page vide ou d&#39;erreur : rechargez une fois, vérifiez la connexion et les permissions ; sur une PWA déjà installée, fermez-la puis rouvrez-la pour actualiser son cache. Consultez le dépôt GitHub si le problème persiste.</p>
     <div class="sn-guide-links">
