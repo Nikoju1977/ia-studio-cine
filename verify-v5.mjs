@@ -1,15 +1,17 @@
 // META-STUDIO PRO V5 — static integrity tests (Node 22)
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
 const html=fs.readFileSync('index.html','utf8');
 const core=fs.readFileSync('meta-studio-v5-core.js','utf8');
 const free=fs.readFileSync('meta-studio-free-video.js','utf8');
+execFileSync(process.execPath,['--check','meta-studio-free-video.js']);
 const media=fs.readFileSync('meta-studio-v5-media.js','utf8');
 const renderer=fs.readFileSync('meta-studio-v5-render.js','utf8');
 const css=fs.readFileSync('meta-studio-v5.css','utf8');
 assert.match(html,/<title>META-STUDIO PRO V5/);
 assert.match(html,/value="huggingface" selected/);
-assert.match(core,/import \{generateFreeVideo\} from "\.\/meta-studio-free-video\.js"/);
+assert.match(core,/import \{generateFreeVideo\} from "\.\/meta-studio-free-video\.js\?v=5\.3"/);
 assert.match(free,/lightricks-ltx-video-distilled\.hf\.space/);
 assert.match(free,/const endpoint=image/);
 assert.match(free,/text-to-video/);
