@@ -8,8 +8,8 @@ export function movieSupport(){
   if(typeof MediaRecorder==='undefined'||typeof HTMLCanvasElement==='undefined'||
      !HTMLCanvasElement.prototype.captureStream)return null;
   const formats=[
-    'video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus',
-    'video/webm','video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4'
+    'video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4',
+    'video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'
   ];
   return formats.find(x=>MediaRecorder.isTypeSupported(x))||null;
 }
@@ -131,14 +131,29 @@ export async function makeTimelineMovie({clips,results,volumes={},width=1280,hei
       if(recorder?.state==='recording')recorder.stop();}
     abortHandler=()=>stopWith(new DOMException('Export annulé','AbortError'));
     signal?.addEventListener('abort',abortHandler,{once:true});
+    const order=[...(clips.video||[])].sort((a,b)=>a.start-b.start);
+    const transitionTime=.24;
     const draw=t=>{
+      ctx.globalAlpha=1;ctx.filter='none';
       ctx.fillStyle='#000';ctx.fillRect(0,0,width,height);
       const v=active(clips.video||[],t);
       if(v){
         const item=resources.get(v.id);
         if(!item)throw new Error('Plan introuvable : '+v.name);
-        if(item.kind==='image')contain(ctx,item.element,width,height);
-        else if(item.element.readyState>=2)contain(ctx,item.element,width,height);
+        const ix=order.findIndex(c=>c.id===v.id);
+        const previous=ix>0?order[ix-1]:null;
+        const touches=previous&&Math.abs(previous.start+previous.duration-v.start)<.12;
+        const progress=(t-v.start)/transitionTime;
+        if(touches&&progress<1){
+          const old=resources.get(previous.id);
+          if(old && (old.kind==='image'||old.element.readyState>=2)){
+            contain(ctx,old.element,width,height);
+            ctx.globalAlpha=Math.max(0,Math.min(1,progress*progress*(3-2*progress)));
+          }
+        }
+        if(item.kind==='image'||item.element.readyState>=2)
+          contain(ctx,item.element,width,height);
+        ctx.globalAlpha=1;
       }
       const caption=active(clips.overlay||[],t);
       if(caption?.text)subtitle(ctx,caption.text,width,height);
