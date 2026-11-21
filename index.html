@@ -4,15 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#090b11">
-<meta name="description" content="META-STUDIO PRO V5.3 — atelier de création cinéma, Agnes AI, montage, couleur et audio dans le navigateur.">
-<title>META-STUDIO PRO V5 — Atelier Cinéma</title>
+<meta name="description" content="META-STUDIO PRO V6 — atelier de création cinéma, Agnes AI, montage, couleur et audio dans le navigateur.">
+<title>META-STUDIO PRO V6 — Réalisateur IA Autonome</title>
 <link rel="stylesheet" href="./meta-studio-v5.css">
-<script type="module" src="./meta-studio-v5-media.js?v=5.3"></script>
+<script type="module" src="./meta-studio-v5-media.js?v=6"></script>
+<script type="module" src="./meta-studio-auto-film.js?v=6"></script>
 </head>
 <body>
 <div class="app">
 <header class="topbar">
-  <div class="brand"><div class="mark" aria-hidden="true">M5</div><div><div class="eyebrow">Studio Niko Design · Creative tools</div><h1>META-STUDIO <span style="color:var(--gold)">PRO V5</span></h1><p class="sub">Création · Montage · Couleur · Son · IA</p></div></div>
+  <div class="brand"><div class="mark" aria-hidden="true">M5</div><div><div class="eyebrow">Studio Niko Design · Creative tools</div><h1>META-STUDIO <span style="color:var(--gold)">PRO V6</span></h1><p class="sub">Création · Montage · Couleur · Son · IA</p></div></div>
   <div class="top-status" id="caps" aria-label="Capacités du navigateur"><span class="pill">Initialisation…</span></div>
 </header>
 <div class="shell">
@@ -24,17 +25,43 @@
   <button type="button" data-view="audio" aria-selected="false">♫ Audio</button>
   <button type="button" data-view="agent" aria-selected="false">⌘ Agent local</button>
   <button type="button" data-view="export" aria-selected="false">↥ Exports</button>
-  <div class="nav-foot">V5.3<br>Local-first · Sans clé embarquée<br>24 i/s · Design cinéma</div>
+  <div class="nav-foot">V6<br>Local-first · Sans clé embarquée<br>24 i/s · Design cinéma</div>
 </nav>
 <main class="workspace">
 
 <section class="view active" id="view-studio" aria-labelledby="studio-title">
-  <div class="view-header"><div><div class="eyebrow">01 / Production</div><h2 id="studio-title">Studio de génération</h2><p>Agnes AI pour les images, vidéos et idées. Importez aussi vos rushes.</p></div><span class="pill" id="results-count">0</span></div>
+  <div class="view-header"><div><div class="eyebrow">01 / Production</div><h2 id="studio-title">Studio cinéma autonome</h2><p>Une idée → vrais plans IA → montage → export automatique. Gratuit sous quotas GPU.</p></div><span class="pill" id="results-count">0</span></div>
+  <section class="panel auto-director" id="auto-director" aria-labelledby="auto-title">
+<div class="panel-title" id="auto-title">RÉALISATEUR AUTONOME · V6 · 1 CLIC</div>
+<p class="info">Écris une idée : le studio découpe l'histoire en plans, génère de vrais clips IA, contrôle les médias, les place sur la timeline et lance l'export. GPU public gratuit soumis aux quotas, aucun paiement automatique.</p>
+<label class="form-label" for="auto-brief">Synopsis / intention / direction artistique</label>
+<textarea id="auto-brief" rows="4" maxlength="2000" placeholder="Ex. Une héroïne 3D découvre une énergie vivante dans une ville futuriste. Cinéma d'animation stylisé, ambiance EBM, caméra fluide, lumière bleu électrique."></textarea>
+<div class="auto-grid">
+  <div><label class="form-label" for="auto-style">Univers visuel</label><select id="auto-style"><option value="animation" selected>Animation 3D stylisée haut de gamme</option><option value="live">Cinéma réaliste 35 mm</option><option value="scifi">Science-fiction VFX</option><option value="music">Clip musical techno / EBM</option></select></div>
+  <div><label class="form-label" for="auto-engine">Modèle vidéo IA gratuit</label><select id="auto-engine"><option value="ltx23" selected>LTX-2.3 · 22B · avec audio</option><option value="huggingface">LTX 13B · secours gratuit</option></select></div>
+  <div><label class="form-label" for="auto-shots">Nombre de plans</label><select id="auto-shots"><option value="3" selected>3 plans · court métrage test</option><option value="4">4 plans · scène courte</option><option value="6">6 plans · séquence narrative</option></select></div>
+  <div><label class="form-label" for="auto-shot-seconds">Durée de chaque plan</label><select id="auto-shot-seconds"><option value="3">3 secondes</option><option value="4" selected>4 secondes</option><option value="5">5 secondes</option><option value="6">6 secondes</option></select></div>
+  <div><label class="form-label" for="auto-quality">Qualité de calcul</label><select id="auto-quality"><option value="high" selected>Haute · qualité cinéma disponible</option><option value="balanced">Équilibrée · GPU plus léger</option></select></div>
+</div>
+<label class="auto-check"><input id="auto-chain" type="checkbox" checked> Enchaîner les plans en utilisant la dernière image du précédent comme référence (si le MP4 est accessible)</label>
+<label class="auto-check"><input id="auto-export" type="checkbox" checked> Monter et exporter automatiquement le film lorsque tous les plans sont générés</label>
+<p id="auto-estimate" class="info"></p>
+<div class="actions auto-actions">
+  <button class="btn primary" type="button" id="auto-create">▶ PRODUIRE LE FILM DE A À Z</button>
+  <button class="btn danger" type="button" id="auto-cancel" disabled>■ Stop</button>
+  <button class="btn green" type="button" id="auto-resume" disabled>↻ Reprendre les plans manquants</button>
+</div>
+<progress id="auto-progress" max="100" value="0" style="width:100%;margin-top:14px" aria-label="Progression du film IA"></progress>
+<p id="auto-count" class="info">0 / 0 plan</p>
+<p id="auto-state" class="auto-state" role="status" aria-live="polite">Prêt pour la réalisation automatique. Sur mobile, garde cet onglet ouvert au premier plan.</p>
+<div id="auto-storyboard" class="auto-storyboard" aria-label="Storyboard de production IA"></div>
+<p class="info">La continuité des visages et la qualité cinéma ne sont pas garanties par le modèle. Les quotas ZeroGPU peuvent interrompre la production ; les vrais plans déjà produits restent disponibles. Aucun faux 4K.</p>
+</section>
   <div class="grid two">
     <div class="panel">
       <div class="panel-title">Direction artistique</div>
       <label class="form-label" for="generation-mode">Production</label>
-      <select id="generation-mode"><option value="video">Vidéo — Agnes Video 2.5</option><option value="image">Image — Agnes Image 2.5</option><option value="chat">Assistant texte — Agnes 2.5</option></select>
+      <select id="generation-mode"><option value="video">Vidéo — IA véritable</option><option value="image">Image — Agnes Image 2.5</option><option value="chat">Assistant texte — Agnes 2.5</option></select>
       <label class="form-label" for="prompt">Prompt / intention du plan</label>
       <textarea id="prompt" rows="7" placeholder="Exemple : Plan large à l'aube, brume légère dans une forêt de Bretagne, caméra travelling lent, texture argentique 35 mm, lumière naturelle…" maxlength="2000"></textarea>
       <div class="row">
@@ -43,15 +70,15 @@
       <div id="video-controls" class="video-controls">
         <label class="form-label" for="video-backend">Service de génération vidéo IA</label>
         <select id="video-backend">
-          <option value="huggingface" selected>LTX Video · GPU partagé gratuit · sans clé payante</option>
+          <option value="ltx23" selected>LTX-2.3 · 22B · vidéo et audio IA</option><option value="huggingface">LTX 13B · secours gratuit</option>
           <option value="agnes">Agnes Video · clé personnelle</option>
         </select>
         <div id="free-video-notice" class="note" style="margin-top:10px">
-          Véritable génération IA texte→vidéo ou image→vidéo via LTX Video sur Hugging Face ZeroGPU. Aucun paiement dans l’application. Quota GPU gratuit quotidien et files d’attente possibles. Pas de génération fictive.
-          <a href="https://huggingface.co/spaces/Lightricks/ltx-video-distilled" target="_blank" rel="noopener noreferrer" style="color:#f3cd8d;text-decoration:underline">Ouvrir le moteur officiel LTX</a>.
+          Moteur LTX-2.3 (22B) : véritable génération vidéo et audio sur GPU ZeroGPU partagé, quotas gratuits quotidiens. Pas de vidéo fictive ni de paiement automatique.
+          <a href="https://huggingface.co/spaces/Lightricks/LTX-2-3" target="_blank" rel="noopener noreferrer" style="color:#f3cd8d;text-decoration:underline">Ouvrir le moteur officiel LTX-2.3</a>.
         </div>
         <div class="row">
-          <div class="field"><label class="form-label" for="frames">Durée vidéo</label><select id="frames"><option value="4">4 secondes</option><option value="5" selected>5 secondes</option><option value="8">8 secondes</option><option value="12">12 secondes</option></select></div>
+          <div class="field"><label class="form-label" for="frames">Durée vidéo</label><select id="frames"><option value="4">4 secondes</option><option value="5" selected>5 secondes</option><option value="8">8 secondes</option><option value="10">10 secondes</option><option value="12">12 secondes (Agnes)</option></select></div>
           <div class="field hidden" id="agnes-video-model-field"><label class="form-label" for="video-model">Moteur Agnes</label><select id="video-model"><option value="agnes-video-2.5-flash">Video 2.5 Flash · 720p</option><option value="agnes-video-2.5">Video 2.5 · facturation possible</option></select></div>
         </div>
         <label class="form-label" for="video-source">Image de départ (facultative)</label>
@@ -62,7 +89,7 @@
       <div class="actions"><button class="btn primary" id="generate-btn">▶ Générer</button><button class="btn danger" id="stop-btn" disabled>■ Stop local</button></div>
       <div id="provider-advice" class="provider-advice hidden" role="alert" aria-live="polite"></div>
       <div id="chat-answer-box" class="panel hidden" style="margin-top:14px"><div class="panel-title">Réponse Agnes</div><p id="chat-answer" style="white-space:pre-wrap;overflow-wrap:anywhere"></p></div>
-      <p class="info">Le mode vidéo LTX gratuit ne nécessite aucune clé Agnes ni carte bancaire, mais dépend du quota GPU partagé et du navigateur (CORS). Les modes Agnes, image IA et assistant texte nécessitent une clé Agnes. Aucun faux résultat ou basculement payant automatique.</p>
+      <p class="info">Les modèles LTX gratuits ne nécessitent ni clé Agnes ni carte bancaire, mais dépendent du quota GPU partagé et du navigateur (CORS). Les modes Agnes, image IA et assistant texte nécessitent une clé Agnes. Aucun faux résultat ou basculement payant automatique.</p>
     </div>
     <div class="grid">
       <div class="panel">
