@@ -171,14 +171,16 @@ async function localCopyOrOriginal(url,signal){
     return {url,downloadable:false};
   }
 }
-async function renderProject(){
+async function renderProject(signal){
   return new Promise((resolve,reject)=>{
     let delivered=false;
+    const cancelRender=()=>document.getElementById('render-stop')?.click();
+    signal?.addEventListener('abort',cancelRender,{once:true});
     const timer=setTimeout(()=>{
-      if(!delivered){delivered=true;reject(new Error('Le moteur d’export n’a pas répondu.'));}},960000);
+      if(!delivered){delivered=true;signal?.removeEventListener('abort',cancelRender);reject(new Error('Le moteur d’export n’a pas répondu.'));}},960000);
     document.dispatchEvent(new CustomEvent('studio:request-auto-export',{detail:{
-      resolve:()=>{if(delivered)return;delivered=true;clearTimeout(timer);resolve();},
-      reject:e=>{if(delivered)return;delivered=true;clearTimeout(timer);reject(e);}
+      resolve:()=>{if(delivered)return;delivered=true;clearTimeout(timer);signal?.removeEventListener('abort',cancelRender);resolve();},
+      reject:e=>{if(delivered)return;delivered=true;clearTimeout(timer);signal?.removeEventListener('abort',cancelRender);reject(e);}
     }}));
   });
 }
@@ -238,7 +240,7 @@ async function execute() {
       throw new Error('Toutes les vidéos IA ont été reçues, mais certaines empêchent le master automatique (CORS). Télécharge les MP4 séparément ou importe-les localement avant l’export.');
     if($('auto-export').checked){
       stepStatus('Tous les plans IA sont reçus · assemblage et encodage du master…');
-      await renderProject();
+      await renderProject(signal);
       stepStatus('Master du film créé et téléchargement déclenché. Vérifie le fichier enregistré.','done');
     }else stepStatus('Plans IA générés et montés sur la timeline. Export manuel disponible.','done');
   }catch(e){
@@ -267,6 +269,7 @@ function prepare(){
       const source=state.results.find(r=>r.id===selected && r.type==='image');
       production={idea,shots,engine,ratio:$('aspect').value,quality:$('auto-quality').value,
         initialSource:source?.url||null,lastFrame:null};
+      document.dispatchEvent(new Event('studio:auto-new-timeline'));
       $('auto-resume').disabled=true;updateUI();
       stepStatus('Storyboard professionnel calculé : '+shots.length+' plans, '+shots.length*shots[0].seconds+' secondes environ. Lancement GPU…');
       await execute();
