@@ -546,6 +546,11 @@ function bindAsync(id,cb){
 }
 function init(){
   document.addEventListener('studio:add-clip',e=>appendMedia(e.detail));
+  document.addEventListener('studio:auto-new-timeline',()=>{
+    pause();project.clips.video=[];project.clips.overlay=[];project.selected=null;
+    seek(0);renderTimeline();syncPreview(true);
+    log('Nouveau film autonome : pistes vidéo et titres réinitialisés, pistes audio conservées.','success');
+  });
   document.addEventListener('studio:request-auto-export',e=>{
     exportMovie().then(()=>e.detail?.resolve?.(),error=>e.detail?.reject?.(error));
   });
