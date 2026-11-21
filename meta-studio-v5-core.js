@@ -1,5 +1,6 @@
-/* META-STUDIO PRO V5.3 — core, no secrets on disk */
-import {generateFreeVideo} from "./meta-studio-free-video.js?v=5.3";
+/* META-STUDIO PRO V6 — core, no secrets on disk */
+import {generateFreeVideo} from "./meta-studio-free-video.js?v=6";
+import {generateProVideo} from "./meta-studio-pro-video.js?v=6";
 export const $ = id => document.getElementById(id);
 export const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2));
 export const state = { results: [], busy: false, controller: null, onResult: null };
@@ -143,6 +144,21 @@ async function imageReference(url,signal){
     reader.readAsDataURL(blob);
   });
 }
+export async function generateCinemaShot({prompt,engine='ltx23',ratio='16:9',seconds=4,
+  sourceUrl=null,quality='high',signal,onProgress}){
+  if(!String(prompt).trim())throw new Error('Prompt vidéo vide.');
+  if(engine==='ltx23'){
+    const url=await generateProVideo({prompt,sourceUrl,aspectRatio:ratio,
+      seconds:Math.min(10,seconds),quality,signal,onProgress});
+    return {url,origin:'LTX-2.3 · 22B · image et audio IA',duration:Math.min(10,seconds)};
+  }
+  if(engine==='huggingface'){
+    const url=await generateFreeVideo({prompt,sourceUrl,aspectRatio:ratio,
+      seconds:Math.min(8.5,seconds),signal,onProgress});
+    return {url,origin:'LTX 13B Distilled · IA',duration:Math.min(8.5,seconds)};
+  }
+  throw new Error('Moteur automatique inconnu ou potentiellement payant.');
+}
 function updateVideoSources(){
   const select=$('video-source');
   if(!select)return;
@@ -224,7 +240,7 @@ export async function generate(){
   const mode=$('generation-mode').value;
   const prompt=$('prompt').value.trim();
   if(!prompt)return notify('Saisissez un prompt.','error');
-  if(!keys.length && !(mode==='video' && $('video-backend').value==='huggingface')) return notify('Ce mode exige une clé Agnes. Pour une vraie vidéo gratuite sans clé, choisissez LTX Video.','error');
+  if(!keys.length && !(mode==='video' && ['huggingface','ltx23'].includes($('video-backend').value))) return notify('Ce mode exige une clé Agnes. Pour une vraie vidéo gratuite sans clé, choisissez LTX Video.','error');
   const controller=new AbortController();state.controller=controller;state.busy=true;
   $('generate-btn').disabled=true;$('stop-btn').disabled=false;
   const ratio=$('aspect').value;
@@ -246,16 +262,13 @@ export async function generate(){
       const sourceId=$('video-source').value;
       const source=sourceId?state.results.find(r=>r.id===sourceId&&r.type==='image'):null;
       if(sourceId&&!source)throw new Error('Image de départ absente de la médiathèque.');
-      if(backend==='huggingface'){
-        const videoDuration=Math.min(8.5,seconds);
-        status('LTX Video : génération IA gratuite en cours…');
-        const url=await generateFreeVideo({
-          prompt,sourceUrl:source?.url||null,aspectRatio:ratio,seconds:videoDuration,
-          signal:controller.signal,onProgress:msg=>status(msg)
-        });
-        addResult({type:'video',url,prompt,origin:'LTX Video — Hugging Face ZeroGPU',
-          duration:videoDuration,mime:'video/mp4'});
-        notify('Vidéo générée par le vrai modèle IA LTX et ajoutée à la médiathèque.','success');
+      if(backend==='huggingface'||backend==='ltx23'){
+        const video=await generateCinemaShot({prompt,engine:backend,ratio,
+          seconds,sourceUrl:source?.url||null,quality:'high',
+          signal:controller.signal,onProgress:msg=>status(msg)});
+        addResult({type:'video',url:video.url,prompt,origin:video.origin,
+          duration:video.duration,mime:'video/mp4'});
+        notify('Véritable vidéo IA ajoutée à la médiathèque.','success');
       }else if(backend==='agnes'){
         const model=$('video-model').value;
         if(![CONFIG.video,CONFIG.videoPro].includes(model))throw new Error('Modèle vidéo non autorisé.');
@@ -289,7 +302,7 @@ export async function generate(){
       notify(err.message,'error');
       if(mode==='video'&&advice){
         advice.classList.remove('hidden');
-        advice.textContent=$('video-backend').value==='huggingface' ? 'Le moteur gratuit LTX n’a pas renvoyé de vidéo. Il dispose d’un quota GPU gratuit quotidien limité. Vérifiez le Space officiel Lightricks, et évitez de relancer si une tâche reste active.' : 'Vidéo Agnes non disponible. Vérifiez la file Agnes avant toute relance manuelle ; aucune tâche ne sera dupliquée automatiquement.';
+        advice.textContent=['huggingface','ltx23'].includes($('video-backend').value) ? 'Le moteur gratuit n’a pas renvoyé de vidéo. Il dispose d’un quota GPU gratuit quotidien limité. Vérifiez le Space officiel Lightricks, et évitez de relancer si une tâche reste active.' : 'Vidéo Agnes non disponible. Vérifiez la file Agnes avant toute relance manuelle ; aucune tâche ne sera dupliquée automatiquement.';
       }
     }
   }finally{
@@ -361,7 +374,7 @@ function prepare(){
     const dot=document.createElement('i');dot.className='light';b.append(dot,document.createTextNode(name));
     caps.append(b);
   });
-  showKeys();status('Prêt — importez des rushes ou configurez Agnes.','ok');log('META-STUDIO PRO V5.3 initialisé. Aucune clé conservée sur disque.','success');
+  showKeys();status('Prêt — importez des rushes ou configurez Agnes.','ok');log('META-STUDIO PRO V6 initialisé. Aucune clé conservée sur disque.','success');
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',prepare);
 else prepare();
