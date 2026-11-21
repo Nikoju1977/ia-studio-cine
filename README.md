@@ -1,18 +1,20 @@
-# META-STUDIO PRO V5 — Studio Niko Design
+# META-STUDIO PRO V5.3 — Studio Niko Design
 
-Studio cinéma dans le navigateur : génération Agnes AI, médiathèque, timeline, traitement d’image et audio, exports de projets. Interface française, HTML/CSS/JavaScript natifs.
+Studio cinéma dans le navigateur : génération vidéo IA LTX Video gratuite sur Hugging Face ZeroGPU (Agnes facultatif), médiathèque, timeline, traitement d’image et audio, exports de projets. Interface française, HTML/CSS/JavaScript natifs.
 
-**Page principale :** [index.html](./index.html) — **Version :** 5.2.
+**Page principale :** [index.html](./index.html) — **Version :** 5.3.
 
 ## Démarrage
 1. Lancer un serveur statique dans ce dossier : python3 -m http.server 8000
 2. Ouvrir http://localhost:8000
-3. Importer des images et vidéos, ou utiliser une clé privée Agnes pour les générer.
+3. Dans **Production → Vidéo**, conserver **LTX Video · GPU partagé gratuit**, saisir un prompt et choisir la durée. Une image de la médiathèque peut servir de première image. Pour les autres modes IA, une clé Agnes reste nécessaire.
 4. Ajouter les résultats à la timeline, créer des overlays, appliquer les looks et exporter.
 
-Les modules JavaScript nécessitent HTTP/HTTPS. Sur GitHub Pages ou tout hébergement statique, les appels à Agnes peuvent être bloqués par la politique CORS. Un proxy HTTPS sécurisé est recommandé dans un contexte partagé, non livré dans V5.
+Les modules JavaScript nécessitent HTTP/HTTPS. Sur GitHub Pages, la génération gratuite passe directement par l’API publique Gradio du Space Lightricks ; le navigateur et le Space doivent autoriser les appels CORS. En cas de refus, ouvrir le Space officiel directement. Les appels Agnes peuvent eux aussi être bloqués par CORS.
 
 ## Fonctionnalités
+
+- **LTX Video (sélectionné par défaut)** : véritable modèle de génération texte→vidéo ou image→vidéo (LTX-Video 13B Distilled), calculé sur les GPU partagés Hugging Face ZeroGPU, sans clé API développeur ni carte bancaire. L’API Gradio accepte le prompt, téléverse éventuellement une image, suit la tâche par événements et ajoute **uniquement le vrai fichier vidéo** renvoyé à la médiathèque. Aucun résultat simulé ni moteur payant automatique.
 
 - **Agnes :** chat et image via Agnes 2.5 ; vidéo via Video 2.5 Flash (720p) ou Video 2.5 (facturation possible avec accord explicite). Génération text-to-video et animation depuis une image importée avec mode keyframe, suivi par video_id, annulation locale et respect du Retry-After lors d’un code 429. Les créations vidéo POST ne sont jamais retentées automatiquement. Plusieurs clés peuvent être chargées en mémoire, sans garantie de quota supplémentaire.
 - **Médiathèque :** imports locaux image et vidéo, previews, ajout à la timeline.
@@ -24,6 +26,8 @@ Les modules JavaScript nécessitent HTTP/HTTPS. Sur GitHub Pages ou tout héberg
 - **Export :** véritable film assemblé HD/Full HD avec titres et mixage des pistes audio grâce à Canvas, Web Audio et MediaRecorder (WebM/MP4 selon navigateur), plus médias sources, ZIP, projet JSON, EDL, OTIO JSON et FCPXML référentiel.
 
 ## Limitations honnêtes
+- **LTX sur ZeroGPU n’est pas illimité** : l’accès gratuit dispose d’un quota de temps de GPU quotidien (documentation Hugging Face : 2 minutes en anonyme, 5 minutes avec compte gratuit), de files d’attente et de restrictions éventuelles. Les clips peuvent échouer et ne sont pas garantis. Les paramètres proposés par le modèle sont approximativement de 0,3 à 8,5 s. Le backend et les capacités du Space tiers peuvent changer.
+- **Test réel non confirmé à ce jour :** le code est enregistré sur GitHub et vérifié statiquement, mais aucune génération IA de bout en bout n’a été confirmée depuis un navigateur Android avec réception d’un MP4. Un échec CORS ou un quota saturé reste possible.
 - La génération Agnes nécessite une clé et une connexion réseau, et n’a pas été testée ici avec une clé réelle. Les quotas et tarifs restent ceux du fournisseur.
 - Les URL blob: locales expirent après fermeture du navigateur ; les URL CDN distantes peuvent expirer. L’export ZIP dépend de la disponibilité et du CORS des médias.
 - Le **rendu vidéo** s'effectue en temps réel dans le navigateur, jusqu'à 15 min par export. Le format est **WebM ou MP4 selon MediaRecorder** ; l'exactitude image par image et la lecture de tous les codecs ne sont pas garanties. Pas de ProRes/DNxHR, pas de rendu serveur. Les sources distantes sans autorisation CORS ne peuvent pas être capturées.
@@ -64,3 +68,11 @@ Ce rendu utilise les capacités MediaRecorder/Canvas/Web Audio du navigateur. Il
 - **Vérification restant à faire :** création et encodage réels avec une clé Agnes valide, ainsi qu'un test navigateur Android complet ; le statut de déploiement ne prouve pas leur réussite.
 
 Référence de protocole : https://github.com/AgnesAI-Labs/skills/blob/main/agnes-ai-models/references/model_catalog.md
+
+## V5.3 — Génération IA réellement gratuite (ZeroGPU)
+
+- Moteur par défaut : [Space Lightricks LTX Video Fast](https://huggingface.co/spaces/Lightricks/ltx-video-distilled) (code du Space : [app.py](https://huggingface.co/spaces/Lightricks/ltx-video-distilled/blob/main/app.py)).
+- Appels POST /gradio_api/call/text_to_video ou /image_to_video, lecture du résultat via les événements de la file Gradio. Téléversement /gradio_api/upload pour les images de référence.
+- Les quotas, l’accessibilité du Space, le CORS et la génération finale dépendent de Hugging Face. Toute erreur est présentée à l’utilisateur ; aucun faux MP4 n’est ajouté.
+- L’option Agnes est conservée, mais ne se déclenche jamais automatiquement après un échec de LTX, notamment pour éviter toute facturation.
+- **Protocole et quotas** : https://huggingface.co/docs/hub/spaces-api-endpoints
