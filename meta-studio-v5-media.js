@@ -537,7 +537,7 @@ async function doExport(){
 async function loadProject(file){
   if(!file)return;
   if(file.size>768*1024*1024)throw Error('Fichier trop volumineux sur cet appareil (768 Mo maximum).');
-  let data,archive=null,mediaEntries=new Map();
+  let data,archive=null,mediaEntries=new Map(),audioEntries=new Map();
   const isZip=/\.zip$/i.test(file.name)||/zip/i.test(file.type);
   if(isZip){
     const mod=await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm');
@@ -558,6 +558,20 @@ async function loadProject(file){
         if(!item||typeof item.id!=='string'||typeof item.path!=='string')continue;
         if(!item.path.startsWith('media/')||item.path.includes('..')||!archive.file(item.path))continue;
         mediaEntries.set(item.id,item);
+      }
+    }
+    const audioIndexFile=archive.file('audio-index.json');
+    if(audioIndexFile){
+      const audioText=await audioIndexFile.async('string');
+      if(audioText.length>2*1024*1024)throw Error('Index audio trop volumineux.');
+      const index=JSON.parse(audioText);
+      if(index.format!=='meta-studio-audio-index'||index.version!==1||
+        !Array.isArray(index.files)||index.files.length>2000)
+        throw Error('Index audio incompatible.');
+      for(const item of index.files){
+        if(!item||typeof item.id!=='string'||typeof item.path!=='string')continue;
+        if(!item.path.startsWith('audio/')||item.path.includes('..')||!archive.file(item.path))continue;
+        audioEntries.set(item.id,item);
       }
     }
   }else{
@@ -581,7 +595,9 @@ async function loadProject(file){
     }
   }
   const localMissing=data.results.filter(r=>r&&typeof r.url==='string'&&
-    r.url.startsWith('blob:')&&!mediaEntries.has(r.id)).length;
+    r.url.startsWith('blob:')&&!mediaEntries.has(r.id)).length+
+    data.timeline.clips.audio.filter(c=>typeof c.url==='string'&&
+    c.url.startsWith('blob:')&&!audioEntries.has(c.id)).length;
   const currentClips=allClips().length;
   const question='Importer le projet '+(isZip?'ZIP':'JSON')+' ('+data.results.length+
     ' médias référencés) ?'+(currentClips?' La timeline actuelle ('+currentClips+' clips) sera remplacée.':'')+
@@ -615,11 +631,36 @@ async function loadProject(file){
   }
   for(const kind of validTypes)project.clips[kind]=[];
   let missingClips=0;
+  const cachedAudioUrls=new Map();
   for(const kind of validTypes)for(const c of data.timeline.clips[kind]){
     const newId=map.get(c.sourceId);
     if(kind==='video'&&!newId){missingClips++;continue;}
     const media=state.results.find(x=>x.id===newId);
-    try{addClip(kind,{...c,sourceId:newId||c.sourceId,url:media?.url||c.url});}
+    let clipUrl=media?.url||c.url||'';
+    if(kind==='audio'&&archive&&audioEntries.has(c.id)){
+      const item=audioEntries.get(c.id);
+      try{
+        if(!cachedAudioUrls.has(item.path)){
+          const audioBlob=await archive.file(item.path).async('blob');
+          if(!audioBlob.size)throw Error('Source audio vide');
+          const importedUrl=URL.createObjectURL(new Blob([audioBlob],{type:item.mime||audioBlob.type}));
+          cachedAudioUrls.set(item.path,importedUrl);
+        }
+        clipUrl=cachedAudioUrls.get(item.path);
+      }catch(e){missingClips++;log('Audio non restauré : '+c.name+' · '+e.message,'error');continue;}
+    }else if(kind==='audio'){
+      // A blob URL in a saved JSON is tied to the previous browser session.
+      if(clipUrl.startsWith('blob:')){missingClips++;log('Audio local à réimporter : '+c.name,'error');continue;}
+      if(clipUrl){
+        try{
+          const u=new URL(clipUrl,location.href);
+          if(!['https:','blob:'].includes(u.protocol)&&
+             !(u.protocol==='http:'&&['localhost','127.0.0.1'].includes(u.hostname)))
+            throw Error('source interdite');
+        }catch(_){missingClips++;log('Audio URL non valide : '+c.name,'error');continue;}
+      }
+    }
+    try{addClip(kind,{...c,sourceId:newId||c.sourceId,url:clipUrl});}
     catch(e){missingClips++;log('Clip écarté : '+e.message,'error');}
   }
   seek(Number.isFinite(data.timeline.playhead)?data.timeline.playhead:0);
