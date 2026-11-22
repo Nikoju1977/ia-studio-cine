@@ -24,3 +24,13 @@
 - Aucun test physique sur iPhone/Android ni rendu vidéo de bout en bout n'est confirmé par cette modification.
 
 **Statut :** fonctionnalités codées et committées sur GitHub le 22 novembre 2026 ; déploiement et fonctionnement réels à confirmer.
+
+## Récupération après interruption — nouvelle intégration du 22 novembre 2026
+
+L'onglet **Reprendre un projet** dispose d'une section discrète **Récupération après fermeture ou interruption**. Le navigateur essaie de garder deux générations de sauvegardes de la **structure** du montage (médias référencés, clips vidéo/audio/titres, timecode et durée). Un changement déclenche une sauvegarde différée, avec consolidation lorsque la page devient invisible et contrôle périodique quand elle reste ouverte.
+
+L'utilisateur choisit explicitement **Restaurer la dernière**, **Version précédente**, **Exporter le secours JSON** ou **Effacer les copies locales**. La restauration réutilise la validation et la confirmation d'import habituelles : elle ne prétend pas restaurer les vidéos, enregistrements ou fichiers éphémères contenus dans les URL `blob:`. La sauvegarde de secours est limitée à environ **1,4 Mo de JSON** et les anciennes générations peuvent être effacées par le navigateur, notamment sous pression mémoire ou si l'espace disque est saturé. Deux générations ne sont pas un historique illimité.
+
+Les copies restent dans le stockage local du domaine ; les noms et prompts du projet sont enregistrés **en clair dans ce navigateur**, sans synchronisation ni sauvegarde cloud. Ne place pas de secrets ou de données confidentielles dans les noms ou prompts que tu souhaites sauvegarder. Pour un vrai master récupérable sur un autre appareil, exporte également le ZIP avec ses sources audio et vidéo récupérables et conserve les médias originaux.
+
+**État de livraison :** code GitHub enregistré, sans preuve de restauration réussie sur iPhone ni redéploiement Vercel confirmé pour cette version.
