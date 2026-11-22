@@ -3,8 +3,8 @@
 ## Formats réellement gérés dans le code
 
 - **JSON V5** : description de la médiathèque, clips (vidéo, audio et overlays), timeline et position de lecture. Il **n'embarque aucun fichier binaire**. Une URL `blob:` locale n'est pas réutilisable après fermeture de la page.
-- **ZIP** : `project.json`, `media-index.json` (correspondances identifiants → fichiers), fichiers présents dans `media/` et, en cas d'échec, `media-non-disponibles.txt`. Seuls les médias récupérables avec les permissions navigateur et les règles CORS sont inclus.
-- **Import ZIP** : reconstitution de l'index des médias et de la timeline à partir de l'archive, avec création d'URLs locales temporaires. Ne transforme pas les fichiers en stockage persistant indépendant.
+- **ZIP** : `project.json`, `media-index.json` (correspondances identifiants → fichiers), fichiers présents dans `media/`, `audio-index.json` et les pistes audio récupérables dans `audio/`, et, en cas d'échec, `media-non-disponibles.txt`. Seuls les médias de la médiathèque et les sources audio des clips de la timeline récupérables avec les permissions navigateur et les règles CORS sont inclus.
+- **Import ZIP** : reconstitution de l'index des médias, des pistes audio et de la timeline à partir de l'archive, avec création d'URLs locales temporaires. Ne transforme pas les fichiers en stockage persistant indépendant.
 - **EDL/OTIO/FCPXML** : fichiers d'échange et références aux sources, pas des masters vidéo.
 
 ## Précautions
