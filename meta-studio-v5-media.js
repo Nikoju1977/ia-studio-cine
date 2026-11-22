@@ -483,7 +483,7 @@ async function exportZip(){
   download(blob,'meta-studio-v5.zip');
   if(failures.length)log(failures.length+' source(s) manquante(s) dans le ZIP : consulte media-non-disponibles.txt.','error');
   notify('Archive ZIP préparée : '+included.length+' médias et '+audioIncluded.length+
-    ' clips audio référencés. '+failures.length+' erreur(s) source. Vérifie le téléchargement.','success');
+    ' clips audio référencés. '+failures.length+' erreur(s) source. Vérifie le téléchargement.',failures.length?'error':'success');
 }
 async function exportMovie(auto=false){
   if(movieController)throw new Error('Un rendu est déjà en cours.');
@@ -530,7 +530,7 @@ async function doExport(){
       const r=source==='first'?state.results[0]:state.results[state.results.length-1];
       await downloadOriginal(r);
     }
-    notify('Export préparé. Vérifiez le téléchargement du navigateur.','success');
+    if(mode!=='zip'&&source!=='all')notify('Export préparé. Vérifiez le téléchargement du navigateur.','success');
   }catch(e){notify('Export : '+e.message,'error');}
   finally{$('export-button').disabled=false;}
 }
