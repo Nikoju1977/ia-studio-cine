@@ -1,6 +1,7 @@
 /* META-STUDIO PRO V5 — timeline, looks, local tools, audio & interchange */
 import { $, uid, state, addResult, log, notify, status, generate } from './meta-studio-v5-core.js?v=6';
 import { makeTimelineMovie, movieSupport } from './meta-studio-v5-render.js?v=6';
+import { installTimelineRecovery } from './meta-studio-recovery.js?v=1';
 const FPS=24;
 const $all=(q)=>Array.from(document.querySelectorAll(q));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -15,6 +16,8 @@ const filename=s=>String(s||'media').replace(/[^a-z0-9._-]+/gi,'_').slice(0,55);
 const escXML=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
 const TIME=()=>performance.now();
 const project={clips:{video:[],audio:[],overlay:[]},playhead:0,selected:null,playing:false,duration:60};
+let recoveryController=null;
+function queueRecoverySave(){recoveryController?.schedule();}
 let lastFrame=0,raf=0,visualId=null,mediaAudio=new Map();
 let processedCanvas=null;
 let movieController=null;
@@ -93,7 +96,7 @@ function renderTimeline(){
 function addClip(track,clip){
   if(!validTypes.includes(track))throw new Error('Piste invalide');
   const element={id:uid(),name:clip.name||track,sourceId:clip.sourceId||null,url:clip.url||'',start:clip.start??0,duration:clip.duration||5,offset:clip.offset||0,text:clip.text||'',kind:clip.kind||'ambience'};
-  project.clips[track].push(element);project.selected=element.id;renderTimeline();
+  project.clips[track].push(element);project.selected=element.id;renderTimeline();queueRecoverySave();
   log('Clip ajouté : '+element.name,'success');return element;
 }
 function appendMedia(item){
@@ -111,12 +114,12 @@ function cut(){
       clip.duration=before;n++;
     }
   });
-  renderTimeline();notify(n?n+' clip(s) coupé(s).':'Aucun clip à couper.',n?'success':'');
+  renderTimeline();if(n)queueRecoverySave();notify(n?n+' clip(s) coupé(s).':'Aucun clip à couper.',n?'success':'');
 }
 function removeClip(){
   if(!project.selected)return notify('Sélectionne un clip sur la timeline.','error');
   for(const k of validTypes)project.clips[k]=project.clips[k].filter(c=>c.id!==project.selected);
-  project.selected=null;renderTimeline();syncPreview(true);notify('Clip supprimé.','success');
+  project.selected=null;renderTimeline();syncPreview(true);queueRecoverySave();notify('Clip supprimé.','success');
 }
 function sourceVideoTime(c){return Math.max(0,c.offset+project.playhead-c.start);}
 function activeClip(kind){
@@ -535,7 +538,7 @@ async function doExport(){
   finally{$('export-button').disabled=false;}
 }
 async function loadProject(file){
-  if(!file)return;
+  if(!file)return false;
   if(file.size>768*1024*1024)throw Error('Fichier trop volumineux sur cet appareil (768 Mo maximum).');
   let data,archive=null,mediaEntries=new Map(),audioEntries=new Map();
   const isZip=/\.zip$/i.test(file.name)||/zip/i.test(file.type);
@@ -603,7 +606,7 @@ async function loadProject(file){
     ' médias référencés) ?'+(currentClips?' La timeline actuelle ('+currentClips+' clips) sera remplacée.':'')+
     (localMissing?' ATTENTION : '+localMissing+' média(s) local(aux) absent(s) de cette sauvegarde.':'')+
     ' Enregistre le projet actuel avant de continuer.';
-  if(!window.confirm(question)){notify('Import annulé : timeline actuelle conservée.');return;}
+  if(!window.confirm(question)){notify('Import annulé : timeline actuelle conservée.');return false;}
   pause();
   const map=new Map(),importedUrls=[],unresolved=[];
   for(const r of data.results){
@@ -668,6 +671,8 @@ async function loadProject(file){
   notify('Projet importé : '+map.size+' média(s) relié(s), '+missingClips+
     ' clip(s) non restauré(s).'+(incomplete?' Vérifie les sources manquantes.':''),
     incomplete?'error':'success');
+  queueRecoverySave();
+  return true;
 }
 function agentMessage(message,kind='system'){
   const box=$('agent-log'),bubble=document.createElement('div');
@@ -711,10 +716,17 @@ function bindAsync(id,cb){
   });
 }
 function init(){
+  recoveryController=installTimelineRecovery({
+    capture:serializableProject,
+    restore:loadProject,
+    hasContent:()=>state.results.length>0||allClips().length>0,
+    notice:notify
+  });
+  document.addEventListener('studio:result',queueRecoverySave);
   document.addEventListener('studio:add-clip',e=>appendMedia(e.detail));
   document.addEventListener('studio:auto-new-timeline',()=>{
     pause();project.clips.video=[];project.clips.overlay=[];project.selected=null;
-    seek(0);renderTimeline();syncPreview(true);
+    seek(0);renderTimeline();syncPreview(true);queueRecoverySave();
     log('Nouveau film autonome : pistes vidéo et titres réinitialisés, pistes audio conservées.','success');
   });
   document.addEventListener('studio:request-auto-export',e=>{
