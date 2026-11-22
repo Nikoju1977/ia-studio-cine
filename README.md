@@ -89,3 +89,9 @@ Référence de protocole : https://github.com/AgnesAI-Labs/skills/blob/main/agne
 - Les **sources ne sont pas du 4K garanti** : LTX-2.3 utilise ici des trames jusqu’à environ 1536 × 864 en horizontal, sous réserve d'acceptation GPU. Un export Full HD effectue un redimensionnement et ne constitue pas un nouveau rendu IA en 4K.
 - **Validation effectuée** : contrôles statiques et tests simulant la réception d’événements SSE et d’une URL MP4 ; **pas de véritable film IA généré et joué sur Android vérifié dans cette session**. Cette distinction est importante.
 - Documentation vérifiée : [Space officiel LTX-2.3 — app.py](https://huggingface.co/spaces/Lightricks/LTX-2-3/blob/main/app.py), [ZeroGPU — quotas et limites](https://huggingface.co/docs/hub/spaces-zerogpu).
+
+## Sauvegarde portable — médias et audio (22 novembre 2026)
+
+Le code du studio propose désormais un export ZIP contenant le projet, un index des images/vidéos récupérables et un index des **sources audio de la timeline** récupérables. Les médias impossibles à télécharger (CORS, URL expirée, permissions, espace mémoire) sont signalés dans `media-non-disponibles.txt`. Le ZIP est importable depuis le panneau « Reprendre un projet » et la timeline ne doit être remplacée qu'après confirmation. L'import JSON seul ne restaure pas les URL `blob:` périmées.
+
+Un lien de téléchargement manuel reste accessible cinq minutes après la préparation d'un export pour les navigateurs qui bloquent les téléchargements automatiques après calcul asynchrone. Ces changements sont **committés**, sans validation sur appareil ni preuve de nouveau déploiement en production. [Procédure et limites détaillées](SAUVEGARDE_MEDIA.md).
