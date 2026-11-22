@@ -325,10 +325,35 @@ function speak(text){
   utterance.rate=Number($('tts-rate').value);
   speechSynthesis.speak(utterance);
 }
+let pendingExportUrl=null,exportUrlTimer=null;
 function download(blob,name){
-  const url=URL.createObjectURL(blob),a=document.createElement('a');
-  a.href=url;a.download=filename(name);document.body.append(a);a.click();a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),60000);
+  if(!(blob instanceof Blob)||blob.size===0)throw Error('Export vide : aucun fichier à enregistrer.');
+  const url=URL.createObjectURL(blob),file=filename(name);
+  if(pendingExportUrl){try{URL.revokeObjectURL(pendingExportUrl);}catch(_){}}
+  if(exportUrlTimer)clearTimeout(exportUrlTimer);
+  pendingExportUrl=url;
+  const button=$('export-button');
+  if(button){
+    let manual=$('manual-export-download');
+    if(!manual){
+      manual=document.createElement('a');manual.id='manual-export-download';
+      manual.className='btn small';
+      manual.style.cssText='display:block;min-height:44px;padding:11px 13px;margin:9px 0;border:1px solid #7ad8c7;background:#173c3b;color:#e1fff5;text-align:center;overflow-wrap:anywhere';
+      button.insertAdjacentElement('afterend',manual);
+    }
+    manual.href=url;manual.download=file;
+    manual.textContent='Téléchargement manuel : '+file+' (si le navigateur bloque)';
+    manual.hidden=false;
+  }
+  const a=document.createElement('a');
+  a.href=url;a.download=file;document.body.append(a);a.click();a.remove();
+  // iOS may reject automatic downloads after an async render. Manual link survives 5 min.
+  exportUrlTimer=setTimeout(()=>{
+    if(pendingExportUrl!==url)return;
+    URL.revokeObjectURL(url);pendingExportUrl=null;
+    const manual=$('manual-export-download');
+    if(manual){manual.removeAttribute('href');manual.textContent='Lien expiré : relance un export.';}
+  },300000);
 }
 function downloadText(text,name,type='text/plain'){
   download(new Blob([text],{type:type+';charset=utf-8'}),name);
@@ -527,8 +552,8 @@ async function loadProject(file){
     for(const c of data.timeline.clips[kind]){
       if(!c||typeof c!=='object'||typeof c.name!=='string'||
         !Number.isFinite(c.start)||c.start<0||
-        !Number.isFinite(c.duration)||c.duration<=0||
-        !Number.isFinite(c.offset)||c.offset<0)
+        !Number.isFinite(c.duration)||c.duration<=0||c.start+c.duration>14400||
+        !Number.isFinite(c.offset)||c.offset<0||c.offset>14400)
         throw Error('Clip invalide sur la piste '+kind+' : import annulé avant modification.');
     }
   }
