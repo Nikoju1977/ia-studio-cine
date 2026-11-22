@@ -437,11 +437,11 @@ async function downloadOriginal(r){
   download(blob,'meta-studio-'+r.id+'.'+ext);
 }
 async function exportZip(){
-  if(!state.results.length)throw new Error('Médiathèque vide.');
+  if(!state.results.length&&!project.clips.audio.length)throw Error('Aucun média à archiver.');
   const mod=await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm');
   const zip=new mod.default();
   zip.file('project.json',JSON.stringify(serializableProject(),null,2));
-  const failures=[],included=[];
+  const failures=[],included=[],audioIncluded=[],audioPaths=new Map();
   for(const [i,r] of state.results.entries()){
     try{
       status('ZIP : média '+(i+1)+'/'+state.results.length);
@@ -451,16 +451,39 @@ async function exportZip(){
       const path='media/'+String(i+1).padStart(3,'0')+'_'+filename(r.prompt)+'.'+ext;
       zip.file(path,blob);
       included.push({id:r.id,path,type:r.type,mime:mime||r.mime||''});
-    }catch(e){failures.push(r.prompt+' : '+e.message);}
+    }catch(e){failures.push('Médiathèque : '+r.prompt+' : '+e.message);}
+  }
+  for(const [i,c] of project.clips.audio.entries()){
+    if(!c.url){failures.push('Audio : '+c.name+' : aucune URL source');continue;}
+    try{
+      status('ZIP : piste audio '+(i+1)+'/'+project.clips.audio.length);
+      let entry=audioPaths.get(c.url);
+      if(!entry){
+        const {blob,mime}=await sourceBlob({url:c.url,mime:''});
+        if(!blob.size)throw Error('Source audio vide');
+        const rawType=(mime||blob.type||'').toLowerCase();
+        const ext=rawType.includes('wav')?'wav':rawType.includes('mpeg')?'mp3':
+          rawType.includes('ogg')?'ogg':rawType.includes('flac')?'flac':
+          rawType.includes('mp4')?'m4a':rawType.includes('webm')?'webm':
+          (String(c.url).split('?')[0].match(/\.(wav|mp3|ogg|flac|m4a|aac|webm)$/i)?.[1]||'bin');
+        const path='audio/'+String(i+1).padStart(3,'0')+'_'+filename(c.name)+'.'+ext;
+        zip.file(path,blob);
+        entry={path,mime:mime||blob.type||''};
+        audioPaths.set(c.url,entry);
+      }
+      audioIncluded.push({id:c.id,path:entry.path,mime:entry.mime});
+    }catch(e){failures.push('Audio : '+c.name+' : '+e.message);}
   }
   zip.file('media-index.json',JSON.stringify({format:'meta-studio-media-index',version:1,files:included},null,2));
+  zip.file('audio-index.json',JSON.stringify({format:'meta-studio-audio-index',version:1,files:audioIncluded},null,2));
   if(failures.length)zip.file('media-non-disponibles.txt',failures.join('\n'));
-  if(failures.length===state.results.length)throw new Error('Aucun média téléchargeable (CORS / URLs expirées).');
+  if(!included.length&&!audioIncluded.length)throw Error('Aucun média téléchargeable (CORS / URLs expirées).');
   const blob=await zip.generateAsync({type:'blob'});
   if(blob.size<200)throw Error('Archive ZIP vide');
   download(blob,'meta-studio-v5.zip');
-  if(failures.length)log(failures.length+' média(s) manquants dans le ZIP : consulte media-non-disponibles.txt.','error');
-  notify('Archive ZIP préparée : '+included.length+'/'+state.results.length+' médias inclus. Vérifie le téléchargement.','success');
+  if(failures.length)log(failures.length+' source(s) manquante(s) dans le ZIP : consulte media-non-disponibles.txt.','error');
+  notify('Archive ZIP préparée : '+included.length+' médias et '+audioIncluded.length+
+    ' clips audio référencés. '+failures.length+' erreur(s) source. Vérifie le téléchargement.','success');
 }
 async function exportMovie(auto=false){
   if(movieController)throw new Error('Un rendu est déjà en cours.');
