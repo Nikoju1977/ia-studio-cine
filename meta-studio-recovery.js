@@ -133,10 +133,11 @@ export function installTimelineRecovery({capture,restore,hasContent,notice}){
   });
   window.addEventListener('pagehide',()=>{clearTimeout(timer);checkpoint();});
   // Catch edits made by modules outside the timeline, without serializing audio on every frame.
-  const interval=setInterval(()=>{
+  // Keep the lightweight timer registered across Safari BFCache pagehide/pageshow.
+  // Browsers suspend the timer while the document is frozen; it resumes on return.
+  setInterval(()=>{
     if(!document.hidden&&!restoring)checkpoint();
   },30000);
-  window.addEventListener('pagehide',()=>clearInterval(interval),{once:true});
   update();
   return {schedule,checkpoint};
 }
