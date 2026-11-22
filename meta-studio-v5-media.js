@@ -416,20 +416,26 @@ async function exportZip(){
   const mod=await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm');
   const zip=new mod.default();
   zip.file('project.json',JSON.stringify(serializableProject(),null,2));
-  const failures=[];
+  const failures=[],included=[];
   for(const [i,r] of state.results.entries()){
     try{
       status('ZIP : média '+(i+1)+'/'+state.results.length);
       const {blob,mime}=await sourceBlob(r);
+      if(!blob.size)throw Error('Fichier source vide');
       const ext=extFromMime(mime,r.url,r.type);
-      zip.file('media/'+String(i+1).padStart(3,'0')+'_'+filename(r.prompt)+'.'+ext,blob);
+      const path='media/'+String(i+1).padStart(3,'0')+'_'+filename(r.prompt)+'.'+ext;
+      zip.file(path,blob);
+      included.push({id:r.id,path,type:r.type,mime:mime||r.mime||''});
     }catch(e){failures.push(r.prompt+' : '+e.message);}
   }
+  zip.file('media-index.json',JSON.stringify({format:'meta-studio-media-index',version:1,files:included},null,2));
   if(failures.length)zip.file('media-non-disponibles.txt',failures.join('\n'));
   if(failures.length===state.results.length)throw new Error('Aucun média téléchargeable (CORS / URLs expirées).');
   const blob=await zip.generateAsync({type:'blob'});
+  if(blob.size<200)throw Error('Archive ZIP vide');
   download(blob,'meta-studio-v5.zip');
-  if(failures.length)log(failures.length+' média(s) manquants dans le ZIP.','error');
+  if(failures.length)log(failures.length+' média(s) manquants dans le ZIP : consulte media-non-disponibles.txt.','error');
+  notify('Archive ZIP préparée : '+included.length+'/'+state.results.length+' médias inclus. Vérifie le téléchargement.','success');
 }
 async function exportMovie(auto=false){
   if(movieController)throw new Error('Un rendu est déjà en cours.');
@@ -482,26 +488,97 @@ async function doExport(){
 }
 async function loadProject(file){
   if(!file)return;
-  const data=JSON.parse(await file.text());
-  if(data.format!=='meta-studio-pro'||data.version!==5)throw new Error('Format de projet incompatible.');
+  if(file.size>768*1024*1024)throw Error('Fichier trop volumineux sur cet appareil (768 Mo maximum).');
+  let data,archive=null,mediaEntries=new Map();
+  const isZip=/\.zip$/i.test(file.name)||/zip/i.test(file.type);
+  if(isZip){
+    const mod=await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm');
+    archive=await mod.default.loadAsync(file,{checkCRC32:false});
+    const projectFile=archive.file('project.json');
+    if(!projectFile)throw Error('Archive sans project.json.');
+    const projectText=await projectFile.async('string');
+    if(projectText.length>16*1024*1024)throw Error('Descriptif du projet trop volumineux.');
+    data=JSON.parse(projectText);
+    const indexFile=archive.file('media-index.json');
+    if(indexFile){
+      const indexText=await indexFile.async('string');
+      if(indexText.length>2*1024*1024)throw Error('Index des médias trop volumineux.');
+      const index=JSON.parse(indexText);
+      if(index.format!=='meta-studio-media-index'||index.version!==1||!Array.isArray(index.files))
+        throw Error('Index des médias incompatible.');
+      for(const item of index.files){
+        if(!item||typeof item.id!=='string'||typeof item.path!=='string')continue;
+        if(!item.path.startsWith('media/')||item.path.includes('..')||!archive.file(item.path))continue;
+        mediaEntries.set(item.id,item);
+      }
+    }
+  }else{
+    if(file.size>16*1024*1024)throw Error('Projet JSON trop volumineux (16 Mo maximum).');
+    data=JSON.parse(await file.text());
+  }
+  if(!data||data.format!=='meta-studio-pro'||data.version!==5)
+    throw Error('Format de projet incompatible : META-STUDIO V5 attendu.');
+  if(!Array.isArray(data.results)||data.results.length>1500||
+     !data.timeline||typeof data.timeline!=='object')
+    throw Error('Projet incomplet ou trop volumineux : médias ou timeline invalides.');
+  for(const kind of validTypes){
+    if(!Array.isArray(data.timeline.clips?.[kind])||data.timeline.clips[kind].length>2000)
+      throw Error('Piste '+kind+' manquante ou corrompue.');
+    for(const c of data.timeline.clips[kind]){
+      if(!c||typeof c!=='object'||typeof c.name!=='string'||
+        !Number.isFinite(c.start)||c.start<0||
+        !Number.isFinite(c.duration)||c.duration<=0||
+        !Number.isFinite(c.offset)||c.offset<0)
+        throw Error('Clip invalide sur la piste '+kind+' : import annulé avant modification.');
+    }
+  }
+  const localMissing=data.results.filter(r=>r&&typeof r.url==='string'&&
+    r.url.startsWith('blob:')&&!mediaEntries.has(r.id)).length;
+  const currentClips=allClips().length;
+  const question='Importer le projet '+(isZip?'ZIP':'JSON')+' ('+data.results.length+
+    ' médias référencés) ?'+(currentClips?' La timeline actuelle ('+currentClips+' clips) sera remplacée.':'')+
+    (localMissing?' ATTENTION : '+localMissing+' média(s) local(aux) absent(s) de cette sauvegarde.':'')+
+    ' Enregistre le projet actuel avant de continuer.';
+  if(!window.confirm(question)){notify('Import annulé : timeline actuelle conservée.');return;}
   pause();
-  const map=new Map();
-  for(const r of data.results||[]){
-    if(typeof r.url!=='string'||r.url.startsWith('blob:')){log('Média local à relier : '+r.prompt);continue;}
+  const map=new Map(),importedUrls=[],unresolved=[];
+  for(const r of data.results){
+    if(!r||typeof r!=='object'||!['video','image'].includes(r.type)||
+       typeof r.id!=='string'||typeof r.url!=='string')continue;
+    let url=r.url;
+    if(archive&&mediaEntries.has(r.id)){
+      const item=mediaEntries.get(r.id);
+      try{
+        const blob=await archive.file(item.path).async('blob');
+        if(!blob.size)throw Error('Média vide');
+        url=URL.createObjectURL(new Blob([blob],{type:item.mime||r.mime||blob.type}));
+        importedUrls.push(url);
+      }catch(e){unresolved.push(r.prompt||r.id);continue;}
+    }else if(url.startsWith('blob:')){
+      unresolved.push(r.prompt||r.id);continue;
+    }
     try{
-      const entry=addResult({type:r.type,url:r.url,prompt:r.prompt,origin:'Projet importé',duration:r.duration,mime:r.mime});
+      const entry=addResult({type:r.type,url,prompt:r.prompt,origin:'Projet importé',duration:r.duration,mime:r.mime});
       map.set(r.id,entry.id);
-    }catch(e){log('Média écarté : '+e.message,'error');}
+    }catch(e){unresolved.push(r.prompt||r.id);
+      if(importedUrls.includes(url)){URL.revokeObjectURL(url);importedUrls.splice(importedUrls.indexOf(url),1);}
+      log('Média écarté : '+e.message,'error');
+    }
   }
   for(const kind of validTypes)project.clips[kind]=[];
-  for(const kind of validTypes)for(const c of data.timeline?.clips?.[kind]||[]){
+  let missingClips=0;
+  for(const kind of validTypes)for(const c of data.timeline.clips[kind]){
     const newId=map.get(c.sourceId);
-    if(kind==='video'&&!newId){log('Clip orphelin : '+c.name);continue;}
+    if(kind==='video'&&!newId){missingClips++;continue;}
     const media=state.results.find(x=>x.id===newId);
-    addClip(kind,{...c,sourceId:newId||c.sourceId,url:media?.url||c.url});
+    try{addClip(kind,{...c,sourceId:newId||c.sourceId,url:media?.url||c.url});}
+    catch(e){missingClips++;log('Clip écarté : '+e.message,'error');}
   }
-  seek(Number(data.timeline?.playhead)||0);
-  notify('Projet V5 importé. Vérifiez les liens médias externes.','success');
+  seek(Number.isFinite(data.timeline.playhead)?data.timeline.playhead:0);
+  const incomplete=unresolved.length+missingClips>0;
+  notify('Projet importé : '+map.size+' média(s) relié(s), '+missingClips+
+    ' clip(s) non restauré(s).'+(incomplete?' Vérifie les sources manquantes.':''),
+    incomplete?'error':'success');
 }
 function agentMessage(message,kind='system'){
   const box=$('agent-log'),bubble=document.createElement('div');
