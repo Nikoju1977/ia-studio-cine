@@ -490,6 +490,8 @@ async function exportZip(){
 }
 async function exportMovie(auto=false){
   if(movieController)throw new Error('Un rendu est déjà en cours.');
+  // Preserve the editable timeline before a memory-intensive real-time render.
+  recoveryController?.checkpoint();
   if(!movieSupport())throw new Error('Export vidéo non pris en charge par ce navigateur.');
   pause();
   const controller=new AbortController();movieController=controller;
@@ -607,6 +609,8 @@ async function loadProject(file){
     (localMissing?' ATTENTION : '+localMissing+' média(s) local(aux) absent(s) de cette sauvegarde.':'')+
     ' Enregistre le projet actuel avant de continuer.';
   if(!window.confirm(question)){notify('Import annulé : timeline actuelle conservée.');return false;}
+  // Save the old project before loading potentially large ZIP media.
+  recoveryController?.checkpoint();
   pause();
   const map=new Map(),importedUrls=[],unresolved=[];
   for(const r of data.results){
@@ -725,6 +729,7 @@ function init(){
   document.addEventListener('studio:result',queueRecoverySave);
   document.addEventListener('studio:add-clip',e=>appendMedia(e.detail));
   document.addEventListener('studio:auto-new-timeline',()=>{
+    recoveryController?.checkpoint();
     pause();project.clips.video=[];project.clips.overlay=[];project.selected=null;
     seek(0);renderTimeline();syncPreview(true);queueRecoverySave();
     log('Nouveau film autonome : pistes vidéo et titres réinitialisés, pistes audio conservées.','success');
