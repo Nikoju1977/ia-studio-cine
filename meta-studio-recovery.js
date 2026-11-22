@@ -93,7 +93,7 @@ export function installTimelineRecovery({capture,restore,hasContent,notice}){
         message('Restauration annulée : projet en cours conservé.');
       }else{
         lastFingerprint='';applied=true;
-        notice('Copie de secours chargée. Les URL locales expirées restent à relier. Exporte ensuite un ZIP si les médias sont disponibles.','success');
+        // Keep the import workflow's warning/error state if media could not be restored.
         message('Copie appliquée : relie les sources manquantes puis sauvegarde le projet.');
       }
     }catch(error){
