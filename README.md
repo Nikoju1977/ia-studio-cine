@@ -95,3 +95,11 @@ Référence de protocole : https://github.com/AgnesAI-Labs/skills/blob/main/agne
 Le code du studio propose désormais un export ZIP contenant le projet, un index des images/vidéos récupérables et un index des **sources audio de la timeline** récupérables. Les médias impossibles à télécharger (CORS, URL expirée, permissions, espace mémoire) sont signalés dans `media-non-disponibles.txt`. Le ZIP est importable depuis le panneau « Reprendre un projet » et la timeline ne doit être remplacée qu'après confirmation. L'import JSON seul ne restaure pas les URL `blob:` périmées.
 
 Un lien de téléchargement manuel reste accessible cinq minutes après la préparation d'un export pour les navigateurs qui bloquent les téléchargements automatiques après calcul asynchrone. Ces changements sont **committés**, sans validation sur appareil ni preuve de nouveau déploiement en production. [Procédure et limites détaillées](SAUVEGARDE_MEDIA.md).
+
+## Récupération locale après fermeture ou interruption — 22 novembre 2026
+
+Un panneau repliable **Récupération après fermeture ou interruption** a été ajouté près de l'import de projets. Il sauvegarde automatiquement deux générations de **références et paramètres de timeline** dans le stockage de ce navigateur, notamment au moment de masquer la page ou avant une opération lourde (import ZIP, création d'une nouvelle timeline, rendu). Il propose restauration volontaire, export JSON de secours et suppression des copies locales.
+
+**Important :** ni vidéos ni prises audio ne sont incluses dans ces copies ; les URL temporaires peuvent expirer, et le stockage peut être purgé par iOS/Safari ou saturé (plafond JSON local de 1,4 Mo). Les métadonnées et prompts restent stockés en clair localement, sans synchronisation. La copie ZIP et les originaux restent essentiels. [Documentation détaillée](SAUVEGARDE_MEDIA.md).
+
+**État :** code committé sur GitHub ; restauration non validée physiquement sur iPhone, pas de nouveau déploiement Vercel confirmé ici.
