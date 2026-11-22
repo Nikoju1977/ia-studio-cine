@@ -83,6 +83,7 @@ export function installTimelineRecovery({capture,restore,hasContent,notice}){
     if(!box)return message('Cette copie de secours est absente ou illisible.',true);
     if(restoring)return;
     restoring=true;clearTimeout(timer);
+    let applied=false;
     try{
       // Restore through the regular validated import workflow; never bypass confirmation.
       const json=JSON.stringify(box.project);
@@ -91,14 +92,17 @@ export function installTimelineRecovery({capture,restore,hasContent,notice}){
       if(ok===false){
         message('Restauration annulée : projet en cours conservé.');
       }else{
-        lastFingerprint='';schedule();
+        lastFingerprint='';applied=true;
         notice('Copie de secours chargée. Les URL locales expirées restent à relier. Exporte ensuite un ZIP si les médias sont disponibles.','success');
         message('Copie appliquée : relie les sources manquantes puis sauvegarde le projet.');
       }
     }catch(error){
       message('Restauration impossible : '+(error.message||'échec de lecture')+
         '. La copie locale est conservée.',true);
-    }finally{restoring=false;}
+    }finally{
+      restoring=false;
+      if(applied)schedule();
+    }
   }
   function exportBackup(){
     const box=read(CURRENT);
