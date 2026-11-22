@@ -1,7 +1,7 @@
 /* META-STUDIO PRO V5 — timeline, looks, local tools, audio & interchange */
 import { $, uid, state, addResult, log, notify, status, generate } from './meta-studio-v5-core.js?v=6';
 import { makeTimelineMovie, movieSupport } from './meta-studio-v5-render.js?v=6';
-import { installTimelineRecovery } from './meta-studio-recovery.js?v=1';
+import { installTimelineRecovery } from './meta-studio-recovery.js?v=2';
 const FPS=24;
 const $all=(q)=>Array.from(document.querySelectorAll(q));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
