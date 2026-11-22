@@ -7,7 +7,7 @@
 <meta name="description" content="META-STUDIO PRO V6 — atelier de création cinéma, Agnes AI, montage, couleur et audio dans le navigateur.">
 <title>META-STUDIO PRO V6 — Réalisateur IA Autonome</title>
 <link rel="stylesheet" href="./meta-studio-v5.css?v=7">
-<script type="module" src="./meta-studio-v5-media.js?v=8"></script>
+<script type="module" src="./meta-studio-v5-media.js?v=9"></script>
 <script type="module" src="./meta-studio-auto-film.js?v=6"></script>
 </head>
 <body>
@@ -247,6 +247,17 @@
    <div class="panel-title">Reprendre un projet</div>
    <label class="form-label" for="import-project">Importer un projet JSON V5 ou une archive ZIP avec médias</label><input type="file" id="import-project" accept=".json,.zip,application/json,application/zip">
    <p class="info">Un projet JSON conserve la timeline et les références, <strong>mais pas les fichiers médias locaux</strong>. Le ZIP contient uniquement les médias accessibles au moment de l'export ; son fichier <code>media-non-disponibles.txt</code> signale les manquants. Importer le ZIP permet de relier les médias inclus. Conserve également les originaux séparément ; la reconstruction du projet dépend des ressources présentes.</p>
+   <details id="cinema-recovery" class="studio-recovery" style="margin:16px 0;padding:12px 13px;border:1px solid #4a797e;border-radius:11px;background:#102631">
+     <summary style="cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:700;color:#b8efe8">Récupération après fermeture ou interruption</summary>
+     <p class="info" style="margin:9px 0">Sauvegarde automatique des références et du montage dans ce navigateur, sans vidéos ni fichiers audio. Deux générations sont conservées pour récupérer un montage précédent. Les données peuvent disparaître si Safari nettoie le stockage ; aucun transfert vers un serveur.</p>
+     <p id="cinema-recovery-status" role="status" aria-live="polite" style="font-size:13px;line-height:1.5;color:#c7e9e7"></p>
+     <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+       <button type="button" class="btn small" id="cinema-recovery-latest" disabled style="min-height:44px">Restaurer la dernière</button>
+       <button type="button" class="btn small" id="cinema-recovery-previous" disabled style="min-height:44px">Version précédente</button>
+       <button type="button" class="btn small" id="cinema-recovery-export" disabled style="min-height:44px">Exporter le secours JSON</button>
+       <button type="button" class="btn small" id="cinema-recovery-clear" disabled style="min-height:44px">Effacer les copies locales</button>
+     </div>
+   </details>
    <div class="note">Formats EDL, OTIO et FCPXML : échange de structure et de références. La compatibilité exacte dépend du logiciel de montage et de l’accessibilité des médias.</div>
   </div>
  </div>
