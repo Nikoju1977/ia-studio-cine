@@ -246,7 +246,7 @@
   <div class="panel">
    <div class="panel-title">Reprendre un projet</div>
    <label class="form-label" for="import-project">Importer un projet JSON V5 ou une archive ZIP avec médias</label><input type="file" id="import-project" accept=".json,.zip,application/json,application/zip">
-   <p class="info">Les pistes et les références distantes sont restaurées. Les médias locaux importés sous URL <code>blob:</code> doivent être réimportés après fermeture du navigateur. Sauvegardez toujours les fichiers sources indépendamment.</p>
+   <p class="info">Un projet JSON conserve la timeline et les références, <strong>mais pas les fichiers médias locaux</strong>. Le ZIP contient uniquement les médias accessibles au moment de l'export ; son fichier <code>media-non-disponibles.txt</code> signale les manquants. Importer le ZIP permet de relier les médias inclus. Conserve également les originaux séparément ; la reconstruction du projet dépend des ressources présentes.</p>
    <div class="note">Formats EDL, OTIO et FCPXML : échange de structure et de références. La compatibilité exacte dépend du logiciel de montage et de l’accessibilité des médias.</div>
   </div>
  </div>
