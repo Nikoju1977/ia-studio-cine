@@ -1,6 +1,37 @@
 # META-STUDIO PRO V6 — Studio Niko Design
 
-Studio cinéma dans le navigateur : réalisation autonome, vraie génération vidéo IA LTX-2.3 (22B) et LTX 13B sur Hugging Face ZeroGPU, storyboarding, médiathèque, timeline, traitement d’image et audio, exports de projets. Interface française, HTML/CSS/JavaScript natifs.
+**Browser-based filmmaking · Generative video connectors · Editing and media recovery**
+
+[![UI](https://img.shields.io/badge/UI-Vanilla_JS-blue)](index.html) [![Video](https://img.shields.io/badge/video-Canvas%20%2F%20MediaRecorder-blue)](meta-studio-v5-render.js) [![License](https://img.shields.io/badge/license-restricted-lightgrey)](LICENSE.md)
+
+[Application GitHub Pages (disponibilité non vérifiée)](https://nikoju1977.github.io/ia-studio-cine/) · [Sauvegarde des médias](SAUVEGARDE_MEDIA.md) · [English overview](#english-overview) · [Portfolio](https://github.com/Nikoju1977)
+
+## Architecture technique
+
+```mermaid
+flowchart TD
+    Brief[Synopsis and style] --> Story[Rule-based storyboard]
+    Story --> LTX[External LTX Gradio API]
+    User[User media] --> Library[Media library]
+    LTX --> Check[Video decodability check]
+    Check --> Library
+    Library --> Timeline[Video audio and text timeline]
+    Timeline --> Render[Canvas and Web Audio]
+    Render --> Export[MediaRecorder film]
+    Timeline --> Backup[ZIP and JSON recovery]
+```
+
+| Source | Responsabilité |
+| --- | --- |
+| [meta-studio-auto-film.js](meta-studio-auto-film.js) | Storyboard déterministe, enchaînement des plans et contrôle de décodabilité |
+| [meta-studio-pro-video.js](meta-studio-pro-video.js) | Découverte du protocole Gradio et suivi LTX |
+| [meta-studio-free-video.js](meta-studio-free-video.js) | Connecteur LTX de secours |
+| [meta-studio-v5-render.js](meta-studio-v5-render.js) | Assemblage local et capture audiovisuelle |
+| [meta-studio-recovery.js](meta-studio-recovery.js) | Récupération des références de projet |
+
+**Périmètre vérifié par inspection :** les connecteurs soumettent des demandes à des moteurs externes ; les modèles vidéo ne sont pas embarqués dans le navigateur. Le montage est un traitement local réel, distinct de la génération distante. La disponibilité, les quotas, les prix et les modèles des services tiers ne sont pas revérifiés ici.
+
+Studio cinéma dans le navigateur : réalisation autonome, connecteurs de génération vidéo IA LTX-2.3 (22B) et LTX 13B sur Hugging Face ZeroGPU, storyboarding, médiathèque, timeline, traitement d’image et audio, exports de projets. Interface française, HTML/CSS/JavaScript natifs.
 
 **Page principale :** [index.html](./index.html) — **Version :** 6.0.
 
@@ -103,3 +134,21 @@ Un panneau repliable **Récupération après fermeture ou interruption** a été
 **Important :** ni vidéos ni prises audio ne sont incluses dans ces copies ; les URL temporaires peuvent expirer, et le stockage peut être purgé par iOS/Safari ou saturé (plafond JSON local de 1,4 Mo). Les métadonnées et prompts restent stockés en clair localement, sans synchronisation. La copie ZIP et les originaux restent essentiels. [Documentation détaillée](SAUVEGARDE_MEDIA.md).
 
 **État :** code committé sur GitHub ; restauration non validée physiquement sur iPhone, pas de nouveau déploiement Vercel confirmé ici.
+
+
+## Contrôle reproductible proposé
+
+1. Importer deux plans locaux, un son et un titre, puis exporter à 720p. Contrôler la durée, la lecture et la synchronisation audio.
+2. Exporter un ZIP, fermer l'onglet, réimporter puis vérifier les médias réellement récupérés.
+3. Pour la génération IA, lancer volontairement un plan court avec le moteur choisi. Conserver le statut du fournisseur et vérifier que le fichier reçu est décodable ; une erreur réseau ne constitue pas un résultat.
+4. Documenter le commit, le navigateur, la résolution, le format et les limites constatées. Aucun de ces essais n'a été exécuté pour cette révision du README.
+
+## English overview
+
+META-STUDIO PRO V6 combines rule-based storyboarding, external LTX/Agnes video generation connectors, a media library, a three-track editing timeline and local Canvas/Web Audio/MediaRecorder rendering. External generation requires a working provider, network access, available quotas and compatible CORS. The browser does not run LTX locally. Output is browser-dependent WebM or MP4, not a certified broadcast master or a native 4K AI guarantee. Portable ZIP export and local recovery have different media-retention guarantees; keep original media separately. No fresh generation, runtime test or production deployment was verified during this documentation revision.
+
+## Licence et contribution / License and contribution
+
+[Notice de droits d'auteur](LICENSE.md) : publication du code sans licence open source pour les contributions originales concernées. Les composants tiers gardent leurs licences propres. Signaler les erreurs reproductibles sans publier de médias confidentiels, clés API ou jetons.
+
+**Studio Niko Design** · Filmmaking workflows, explicit limits and reproducible evidence.
