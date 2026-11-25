@@ -4,6 +4,24 @@
 export const movieDuration = clips => Math.max(0,...['video','audio','overlay'].flatMap(
   kind => (clips[kind]||[]).map(c=>Math.max(0,Number(c.start)||0)+Math.max(0,Number(c.duration)||0))
 ));
+export function validateTimeline(clips,trimToVideo=false){
+ if(!clips||typeof clips!=="object")throw Error("Timeline invalide.");
+ const ids=new Set();let count=0,end=0,videoEnd=0;
+ for(const kind of ["video","audio","overlay"]){
+  const rows=clips[kind]??[];if(!Array.isArray(rows))throw Error("Piste invalide.");
+  if(kind==="video"&&!rows.length)throw Error("Ajoutez un plan à V1.");
+  for(const row of rows){
+   if(!row||typeof row.id!=="string"||!row.id||ids.has(row.id))throw Error("Identifiant de clip invalide ou dupliqué.");
+   ids.add(row.id);count++;
+   const {start,duration,offset=0}=row;
+   if(![start,duration,offset].every(Number.isFinite)||start<0||duration<=0||offset<0||start+duration>900||offset+duration>Number.MAX_SAFE_INTEGER)throw Error("Temps de clip invalide.");
+   if(kind!=="overlay"&&(typeof row.url!=="string"||!row.url.trim()))throw Error("Source absente.");
+   end=Math.max(end,start+duration);if(kind==="video")videoEnd=Math.max(videoEnd,start+duration);
+  }
+ }
+ if(count>200)throw Error("Limite de 200 clips par rendu navigateur.");
+ return trimToVideo?videoEnd:end;
+}
 export function movieSupport(){
   if(typeof MediaRecorder==='undefined'||typeof HTMLCanvasElement==='undefined'||
      !HTMLCanvasElement.prototype.captureStream)return null;
@@ -13,30 +31,30 @@ export function movieSupport(){
   ];
   return formats.find(x=>MediaRecorder.isTypeSupported(x))||null;
 }
-function until(el,event,timeout=20000){
+function until(el,event,signal,timeout=20000){
   return new Promise((resolve,reject)=>{
     const timer=setTimeout(()=>done(new Error('Décodage média trop lent ou indisponible.')),timeout);
-    const ok=()=>done(null),bad=()=>done(new Error('Média non pris en charge ou inaccessible (format/CORS).'));
+    const ok=()=>done(null),bad=()=>done(new Error('Média non pris en charge ou inaccessible (format/CORS).')),abort=()=>done(new DOMException('Export annulé','AbortError'));
     function done(error){
-      clearTimeout(timer);el.removeEventListener(event,ok);el.removeEventListener('error',bad);
+      clearTimeout(timer);el.removeEventListener(event,ok);el.removeEventListener('error',bad);signal?.removeEventListener('abort',abort);
       error?reject(error):resolve();
     }
-    el.addEventListener(event,ok,{once:true});el.addEventListener('error',bad,{once:true});
+    el.addEventListener(event,ok,{once:true});el.addEventListener('error',bad,{once:true});signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();
   });
 }
-async function loadSource(c,kind){
+async function loadSource(c,kind,signal,sourceObjects){
   if(!c.url)throw new Error('Source absente : '+c.name);
   if(kind==='image'){
     const el=new Image();
     if(/^https?:/i.test(c.url))el.crossOrigin='anonymous';
-    const ready=until(el,'load');el.src=c.url;await ready;
+    sourceObjects.push(el);const ready=until(el,'load',signal);el.src=c.url;await ready;
     if(!el.naturalWidth)throw new Error('Image invalide : '+c.name);
     return el;
   }
   const el=document.createElement(kind==='audio'?'audio':'video');
   el.preload='auto';el.playsInline=true;
   if(/^https?:/i.test(c.url))el.crossOrigin='anonymous';
-  const ready=until(el,kind==='audio'?'loadedmetadata':'loadeddata');
+  sourceObjects.push(el);const ready=until(el,kind==='audio'?'loadedmetadata':'loadeddata',signal);
   el.src=c.url;el.load();await ready;
   if(kind==='video'&&el.readyState<2)throw new Error('Vidéo non décodable : '+c.name);
   const required=(Number(c.offset)||0)+(Number(c.duration)||0);
@@ -73,13 +91,13 @@ export async function makeTimelineMovie({clips,results,volumes={},width=1280,hei
   if(!mime)throw new Error('Ce navigateur ne sait pas enregistrer la timeline (MediaRecorder/captureStream).');
   if(![1280,1920].includes(width)||!Number.isFinite(height)||height!==Math.round(width*9/16))
     throw new Error('Résolution de rendu invalide.');
-  const duration=trimToVideo?Math.max(0,...(clips.video||[]).map(c=>c.start+c.duration)):movieDuration(clips);
+  const duration=validateTimeline(clips,trimToVideo);if(!Number.isInteger(fps)||fps<1||fps>60)throw new Error('Cadence invalide.');if(document.hidden)throw new Error('Gardez cet onglet visible pendant le rendu.');
   if(!clips.video?.length)throw new Error('Ajoutez au moins un plan vidéo ou une image à V1.');
   if(!(duration>0&&duration<=900))throw new Error('Durée de rendu limitée à 15 min par export.');
   if(signal?.aborted)throw new DOMException('Export annulé','AbortError');
   const resultById=new Map((results||[]).map(r=>[r.id,r]));
   const resources=new Map(), audioNodes=[], sourceObjects=[], mediaStreamTracks=[];
-  let context=null,stream=null,recorder=null,animation=0,abortHandler=null,failed=null;
+  let context=null,stream=null,recorder=null,animation=0,abortHandler=null,visibilityHandler=null,watchdog=0,failed=null;
   try{
     const Ctx=window.AudioContext||window.webkitAudioContext;
     if(!Ctx)throw new Error('Web Audio nécessaire pour le mixage et le rendu.');
@@ -89,9 +107,8 @@ export async function makeTimelineMovie({clips,results,volumes={},width=1280,hei
       const source=resultById.get(item.c.sourceId);
       const kind=item.kind==='audio'?'audio':(source?.type==='image'?'image':source?.type==='video'?'video':
         /\.(mp4|webm|mov)(\?|$)/i.test(item.c.url)?'video':'image');
-      const el=await loadSource(item.c,kind);
+      const el=await loadSource(item.c,kind,signal,sourceObjects);
       resources.set(item.c.id,{element:el,kind,clip:item.c});
-      if(kind!=='image')sourceObjects.push(el);
       report(onProgress,Math.min(12,12*(i+1)/Math.max(1,all.length)),'Chargement des médias');
     }
     const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
@@ -106,31 +123,30 @@ export async function makeTimelineMovie({clips,results,volumes={},width=1280,hei
       try{probeCtx.getImageData(0,0,1,1);}
       catch{throw new Error('Source distante non exportable (CORS). Importez le fichier localement.');}
     }
-    context=new Ctx();const destination=context.createMediaStreamDestination();
+    context=new Ctx();const destination=context.createMediaStreamDestination();mediaStreamTracks.push(...destination.stream.getTracks());
     for(const {kind,element,clip} of resources.values())if(kind!=='image'){
       const gain=context.createGain();
-      gain.gain.value=kind==='video'?1:Math.max(0,Math.min(1,Number(volumes[clip.kind]??.5)));
+      const vol=Number(volumes[clip.kind]??.5);gain.gain.value=kind==='video'?1:Number.isFinite(vol)?Math.max(0,Math.min(1,vol)):.5;
       const input=context.createMediaElementSource(element);
       input.connect(gain);gain.connect(destination);
       audioNodes.push({input,gain,kind,clip});
       element.muted=false; // audio plays only into the recording destination, not the speakers
     }
-    await context.resume();
+    await context.resume();if(signal?.aborted)throw new DOMException('Export annulé','AbortError');if(context.state!=='running')throw new Error('Le contexte audio n’a pas démarré.');
     const canvasStream=canvas.captureStream(fps);
     stream=new MediaStream([...canvasStream.getVideoTracks(),...destination.stream.getAudioTracks()]);
-    mediaStreamTracks.push(...canvasStream.getTracks(),...destination.stream.getTracks());
+    mediaStreamTracks.push(...canvasStream.getTracks());
     const bitrate=width===1920?12000000:6000000;
-    const chunks=[];
+    const chunks=[];let bytes=0;const budget=192*1024*1024;
     recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:bitrate});
     const finished=new Promise((resolve,reject)=>{
-      recorder.ondataavailable=e=>{if(e.data?.size)chunks.push(e.data);};
+      recorder.ondataavailable=e=>{if(e.data?.size){bytes+=e.data.size;if(bytes>budget){stopWith(new Error('Budget mémoire vidéo de 192 Mio dépassé. Réduisez la durée ou la résolution.'));return;}chunks.push(e.data);}};
       recorder.onerror=e=>reject(e.error||new Error('Erreur du moteur d’encodage.'));
       recorder.onstop=()=>resolve();
     });
-    function stopWith(error){failed=error;cancelAnimationFrame(animation);
-      if(recorder?.state==='recording')recorder.stop();}
+    function stopWith(error){if(error&&!failed)failed=error;cancelAnimationFrame(animation);if(recorder?.state&&recorder.state!=='inactive')recorder.stop();}
     abortHandler=()=>stopWith(new DOMException('Export annulé','AbortError'));
-    signal?.addEventListener('abort',abortHandler,{once:true});
+    signal?.addEventListener('abort',abortHandler,{once:true});visibilityHandler=()=>{if(document.hidden)stopWith(new Error('Rendu interrompu : onglet masqué.'));};document.addEventListener('visibilitychange',visibilityHandler);if(signal?.aborted)throw new DOMException('Export annulé','AbortError');
     const order=[...(clips.video||[])].sort((a,b)=>a.start-b.start);
     const transitionTime=.24;
     const draw=t=>{
@@ -165,10 +181,10 @@ export async function makeTimelineMovie({clips,results,volumes={},width=1280,hei
       if(el.paused)el.play().catch(e=>stopWith(new Error('Lecture média refusée : '+e.message)));
     }
     draw(0);recorder.start(1000);
-    const started=performance.now();
+    const started=performance.now();let lastTick=started;watchdog=setInterval(()=>{if(performance.now()-lastTick>2500||context.state!=='running')stopWith(new Error('Rendu interrompu : horloge ou audio suspendu.'));},500);
     function tick(){
       if(failed||recorder.state!=='recording')return;
-      const t=Math.min(duration,(performance.now()-started)/1000);
+      const now=performance.now();if(now-lastTick>2500){stopWith(new Error('Rendu interrompu : images manquantes après suspension.'));return;}lastTick=now;const t=Math.min(duration,(now-started)/1000);
       try{
         const visible=active(clips.video||[],t);
         for(const {kind,element,clip} of resources.values()){
@@ -192,14 +208,14 @@ export async function makeTimelineMovie({clips,results,volumes={},width=1280,hei
     await finished;
     if(failed)throw failed;
     if(!chunks.length)throw new Error('Le navigateur n’a produit aucune donnée vidéo.');
-    const blob=new Blob(chunks,{type:mime});
+    const actualMime=recorder.mimeType||mime;const blob=new Blob(chunks,{type:actualMime});
     if(blob.size<512)throw new Error('Fichier rendu vide.');
     report(onProgress,100,'Terminé');
-    return {blob,mime,extension:mime.includes('mp4')?'mp4':'webm',duration};
+    return {blob,mime:actualMime,extension:actualMime.includes('mp4')?'mp4':'webm',duration};
   }finally{
-    cancelAnimationFrame(animation);
+    cancelAnimationFrame(animation);clearInterval(watchdog);if(visibilityHandler)document.removeEventListener('visibilitychange',visibilityHandler);
     if(abortHandler)signal?.removeEventListener('abort',abortHandler);
-    for(const el of sourceObjects){try{el.pause();el.removeAttribute('src');el.load();}catch{}}
+    for(const el of sourceObjects){try{el.pause?.();el.removeAttribute('src');el.load?.();}catch{}}
     for(const node of audioNodes){try{node.input.disconnect();node.gain.disconnect();}catch{}}
     if(recorder?.state==='recording')try{recorder.stop();}catch{}
     mediaStreamTracks.forEach(t=>{try{t.stop();}catch{}});
