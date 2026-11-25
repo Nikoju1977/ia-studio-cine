@@ -224,3 +224,10 @@ META-STUDIO PRO V6 combines rule-based storyboarding, external LTX/Agnes video g
 ## Licence & auteur / License & author
 
 [Notice de droits](LICENSE.md) © 2026 Studio Niko Design (Nikoju1977). Tous droits réservés pour les contributions originales concernées. Publication publique ≠ licence open source ; les droits et licences tiers demeurent applicables. Aucun fichier de licence n'a été modifié.
+
+
+## Qualification du rendu réel Chromium — 25 novembre 2026
+
+Le [banc de tests](tests/browser-render.cjs) exerce directement le module de production `meta-studio-v5-render.js`, dans une page de test isolée. Il compose une image rouge et un plan vidéo bleu synthétiques, une piste sonore sinusoïdale et un sous-titre en 1280 × 720, puis encode réellement via Canvas, Web Audio et MediaRecorder. FFmpeg/ffprobe vérifient les flux vidéo/audio, décodent le fichier et contrôlent les pixels des plans, le sous-titre et le niveau PCM. Le test couvre l'annulation en cours de rendu, l'annulation préalable et la reprise. Aucun GPU distant, clé API ni média utilisateur. [Workflow](.github/workflows/browser-render.yml) · [Run](https://github.com/Nikoju1977/ia-studio-cine/actions/runs/45706546556) : résultat à contrôler. Exécution depuis la racine : `node tests/browser-render.cjs` (Node avec WebSocket, Chrome, Python 3, FFmpeg et ffprobe). Le banc de tests indépendant, adapté de NikoAssist et OpenVita de Studio Niko Design, est sous GPL-3.0-or-later ; [licence](tests/LICENSE-GPL-3.0). Le code applicatif et sa licence restent inchangés.
+
+Ce scénario ne qualifie pas les fournisseurs LTX/Agnes en ligne, la timeline dans son interface complète, Safari, les téléphones physiques, les longues durées, le mastering déterministe ou tous les formats et FX.
