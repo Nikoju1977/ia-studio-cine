@@ -3,6 +3,20 @@
    daily GPU quotas and can be busy or unavailable. */
 export const FREE_VIDEO_SPACE = 'https://lightricks-ltx-video-distilled.hf.space';
 export const FREE_VIDEO_PAGE = 'https://huggingface.co/spaces/Lightricks/ltx-video-distilled';
+function createSseReader(max=1500000){
+ let buffer="",pendingCR=false;
+ return function push(chunk,done=false){
+  let s=String(chunk);
+  if(pendingCR){s="\r"+s;pendingCR=false;}
+  if(!done&&s.endsWith("\r")){s=s.slice(0,-1);pendingCR=true;}
+  buffer+=s.replace(/\r\n|\r/g,"\n");
+  if(buffer.length>max)throw Error("Flux SSE trop volumineux.");
+  const packets=[];let sep;
+  while((sep=buffer.indexOf("\n\n"))>=0){packets.push(buffer.slice(0,sep));buffer=buffer.slice(sep+2);}
+  if(done&&buffer.trim()){packets.push(buffer);buffer="";}
+  return packets;
+ };
+}
 const API = FREE_VIDEO_SPACE + '/gradio_api';
 
 function failNetwork(err, step) {
@@ -52,7 +66,7 @@ async function uploadImage(sourceUrl, signal) {
   catch (err) { failNetwork(err,'lecture de l’image'); }
   if (!response.ok) throw new Error('Impossible de lire l’image de départ.');
   const blob=await response.blob();
-  if (!blob.type.startsWith('image/')) throw new Error('Sélectionnez une image JPG, PNG ou WebP.');
+  if (!/^image\/(png|jpeg|webp)$/i.test(blob.type)) throw new Error('Sélectionnez une image JPG, PNG ou WebP.');
   if (blob.size>6500000) throw new Error('Image de départ supérieure à 6,5 Mo : réduisez-la.');
   const form=new FormData();
   form.append('files',blob,'studio-niko-image.'+(blob.type.includes('png')?'png':blob.type.includes('webp')?'webp':'jpg'));
@@ -62,6 +76,11 @@ async function uploadImage(sourceUrl, signal) {
   return {path,orig_name:'studio-niko-image.png',meta:{_type:'gradio.FileData'}};
 }
 export async function generateFreeVideo({prompt,sourceUrl,aspectRatio='16:9',seconds=4,signal,onProgress}) {
+  const callerSignal=signal, controller=new AbortController();
+  const cancel=()=>controller.abort();callerSignal?.addEventListener('abort',cancel,{once:true});if(callerSignal?.aborted)cancel();
+  const timeout=setTimeout(()=>controller.abort(),600000);signal=controller.signal;
+  try{
+  if(typeof prompt!=='string'||!prompt.trim())throw new Error('Une description de plan est nécessaire.');
   const dims=({
     '16:9':[512,896], '9:16':[896,512], '1:1':[704,704]
   })[aspectRatio]||[512,896];
@@ -88,6 +107,7 @@ export async function generateFreeVideo({prompt,sourceUrl,aspectRatio='16:9',sec
   if (!job?.event_id) throw new Error('Le service LTX n’a pas accepté la génération (aucun event_id).');
   onProgress?.('LTX : tâche acceptée, file d’attente du GPU gratuit…');
   return await awaitVideoTask(job.event_id,endpoint,signal,onProgress);
+  }catch(e){if(controller.signal.aborted&&!callerSignal?.aborted)throw new Error('Délai de 10 minutes dépassé. La tâche distante peut continuer ; vérifiez le Space avant de relancer.');throw e;}finally{clearTimeout(timeout);callerSignal?.removeEventListener('abort',cancel);}
 }
 async function awaitVideoTask(eventId,endpoint,signal,onProgress) {
   if (!/^[\w-]{5,128}$/.test(String(eventId)))
@@ -102,16 +122,12 @@ async function awaitVideoTask(eventId,endpoint,signal,onProgress) {
   if (!response.ok) throw new Error('Suivi LTX indisponible (HTTP '+response.status+').');
   if (!response.body?.getReader) throw new Error('Ce navigateur ne peut pas recevoir les événements du GPU.');
   const reader=response.body.getReader(), decoder=new TextDecoder();
-  let buffer='';
+  const packets=createSseReader(2000000);
   try {
     while (true) {
       const {value,done}=await reader.read();
-      buffer+=decoder.decode(value||new Uint8Array(),{stream:!done}).replace(/\r\n/g,'\n');
-      if (buffer.length>2000000) throw new Error('Réponse LTX trop volumineuse.');
-      let sep;
-      while ((sep=buffer.indexOf('\n\n'))>=0) {
-        const evt=parseSsePacket(buffer.slice(0,sep));
-        buffer=buffer.slice(sep+2);
+      for(const packet of packets(decoder.decode(value||new Uint8Array(),{stream:!done}),done)){
+        const evt=parseSsePacket(packet);
         if (!evt) continue;
         if (evt.type==='complete') return videoURL(evt.value);
         if (evt.type==='error') {
@@ -124,6 +140,6 @@ async function awaitVideoTask(eventId,endpoint,signal,onProgress) {
       if (done) break;
     }
   } catch(err) { failNetwork(err,'résultat vidéo'); }
-  finally { reader.releaseLock(); }
+  finally { try{await reader.cancel();}catch{}reader.releaseLock(); }
   throw new Error('La connexion au Space s’est arrêtée sans vidéo. Consultez directement le Space, puis relancez si nécessaire.');
 }
