@@ -4,6 +4,20 @@
  */
 export const PRO_VIDEO_SPACE = 'https://lightricks-ltx-2-3.hf.space';
 export const PRO_VIDEO_PAGE = 'https://huggingface.co/spaces/Lightricks/LTX-2-3';
+function createSseReader(max=1500000){
+ let buffer="",pendingCR=false;
+ return function push(chunk,done=false){
+  let s=String(chunk);
+  if(pendingCR){s="\r"+s;pendingCR=false;}
+  if(!done&&s.endsWith("\r")){s=s.slice(0,-1);pendingCR=true;}
+  buffer+=s.replace(/\r\n|\r/g,"\n");
+  if(buffer.length>max)throw Error("Flux SSE trop volumineux.");
+  const packets=[];let sep;
+  while((sep=buffer.indexOf("\n\n"))>=0){packets.push(buffer.slice(0,sep));buffer=buffer.slice(sep+2);}
+  if(done&&buffer.trim()){packets.push(buffer);buffer="";}
+  return packets;
+ };
+}
 const API = PRO_VIDEO_SPACE + '/gradio_api';
 const RATIO = {
   high: {'16:9':[1536,864],'9:16':[864,1536],'1:1':[1024,1024]},
@@ -96,16 +110,12 @@ async function streamJob(endpoint,eventId,signal,onProgress) {
   if(!res.ok)throw new Error('Suivi de LTX-2.3 impossible : HTTP '+res.status);
   if(!res.body?.getReader)throw new Error('Streaming Gradio indisponible sur ce navigateur.');
   const reader=res.body.getReader(),decoder=new TextDecoder();
-  let buffer='';
+  const packets=createSseReader();
   try {
     while(true) {
       const {value,done}=await reader.read();
-      buffer+=decoder.decode(value||new Uint8Array(),{stream:!done}).replace(/\r\n/g,'\n');
-      if(buffer.length>1500000)throw new Error('Réponse LTX-2.3 anormalement volumineuse.');
-      let pos;
-      while((pos=buffer.indexOf('\n\n'))>=0){
-        const e=readPacket(buffer.slice(0,pos));
-        buffer=buffer.slice(pos+2);
+      for(const packet of packets(decoder.decode(value||new Uint8Array(),{stream:!done}),done)){
+        const e=readPacket(packet);
         if(!e)continue;
         if(e.type==='complete')return findVideo(e.data);
         if(e.type==='error'){
@@ -118,12 +128,16 @@ async function streamJob(endpoint,eventId,signal,onProgress) {
       if(done)break;
     }
   }catch(error){explain(error,'réception du résultat');}
-  finally{reader.releaseLock();}
+  finally{try{await reader.cancel();}catch{}reader.releaseLock();}
   throw new Error('Le flux de la tâche LTX-2.3 s’est interrompu avant l’envoi du MP4.');
 }
 export async function generateProVideo({prompt,sourceUrl=null,aspectRatio='16:9',
   seconds=4,quality='high',signal,onProgress}){
-  if(!String(prompt).trim())throw new Error('Une description de plan est nécessaire.');
+  const callerSignal=signal, controller=new AbortController();
+  const cancel=()=>controller.abort();callerSignal?.addEventListener('abort',cancel,{once:true});if(callerSignal?.aborted)cancel();
+  const timeout=setTimeout(()=>controller.abort(),600000);signal=controller.signal;
+  try{
+  if(typeof prompt!=='string'||!prompt.trim())throw new Error('Une description de plan est nécessaire.');
   const duration=Math.min(10,Math.max(1,Number(seconds)||4));
   const [width,height]=(RATIO[quality]||RATIO.high)[aspectRatio]||RATIO.high['16:9'];
   onProgress?.('LTX-2.3 : vérification du moteur vidéo 22B gratuit…');
@@ -143,5 +157,6 @@ export async function generateProVideo({prompt,sourceUrl=null,aspectRatio='16:9'
   },'création de la tâche');
   if(typeof job?.event_id!=='string')throw new Error('LTX-2.3 n’a pas retourné de tâche acceptée.');
   onProgress?.('LTX-2.3 : tâche acceptée, GPU partagé en attente…');
-  return streamJob(endpoint,job.event_id,signal,onProgress);
+  return await streamJob(endpoint,job.event_id,signal,onProgress);
+  }catch(e){if(controller.signal.aborted&&!callerSignal?.aborted)throw new Error('Délai de 10 minutes dépassé. La tâche distante peut continuer ; vérifiez le Space avant de relancer.');throw e;}finally{clearTimeout(timeout);callerSignal?.removeEventListener('abort',cancel);}
 }
