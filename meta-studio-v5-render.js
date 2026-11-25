@@ -26,7 +26,10 @@ export function movieSupport(){
   if(typeof MediaRecorder==='undefined'||typeof HTMLCanvasElement==='undefined'||
      !HTMLCanvasElement.prototype.captureStream)return null;
   const formats=[
-    'video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4',
+    // A generic MP4 request may select VP9/Opus, poorly supported by editors.
+    // Prefer explicitly declared H.264/AAC, then interoperable WebM variants.
+    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+    'video/mp4;codecs=avc1,mp4a.40.2',
     'video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'
   ];
   return formats.find(x=>MediaRecorder.isTypeSupported(x))||null;
