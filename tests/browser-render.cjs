@@ -109,6 +109,8 @@ async function main(){
   const probe=JSON.parse(execFileSync('ffprobe',['-v','error','-show_streams','-show_format','-of','json',output],{encoding:'utf8'}));
   const video=probe.streams.find(s=>s.codec_type==='video'),audio=probe.streams.find(s=>s.codec_type==='audio');
   assert.ok(video&&audio,'Both real video and audio streams required');
+  if(result.extension==='mp4'){assert.equal(video.codec_name,'h264','MP4 video must be H.264');assert.equal(audio.codec_name,'aac','MP4 audio must be AAC');}
+  else {assert.ok(['vp8','vp9'].includes(video.codec_name));assert.equal(audio.codec_name,'opus');}
   assert.equal(video.width,1280);assert.equal(video.height,720);
   // Decode actual output, not just container headers.
   execFileSync('ffmpeg',['-v','error','-xerror','-i',output,'-f','null','-']);
