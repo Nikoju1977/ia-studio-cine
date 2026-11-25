@@ -10,6 +10,16 @@
 
 > [Insérer ici un GIF de démonstration / Insert demo GIF here]
 
+## Fiabilisation du 25 novembre 2026 — rendu et connecteurs LTX
+
+[Correctif rendu](https://github.com/Nikoju1977/ia-studio-cine/commit/fe85546690a0090c942fe569e687e1c0f7fd4201) · [LTX-2.3](https://github.com/Nikoju1977/ia-studio-cine/commit/28ad3fb411e0d1b5402e4b259e014f407a511e29) · [LTX 13B](https://github.com/Nikoju1977/ia-studio-cine/commit/c7031929f0b078d20fef8d9339b2db4410e4caa1).
+
+- Validation du temps, des identifiants et des sources de la timeline avant rendu ; plafond interne de 200 clips et de 192 Mio de données encodées cumulées. Le plafond n'est pas une mesure de la mémoire totale du navigateur.
+- Arrêt explicite si l'onglet est masqué ou l'horloge de rendu / l'audio suspendus, annulation du chargement média, nettoyage des ressources, format basé sur le MIME effectif du MediaRecorder.
+- LTX : traitement des séparateurs CRLF fragmentés et du dernier paquet SSE sans séparateur final ; fermeture du flux, délai local maximal de dix minutes, validation du prompt et du format d'image. Pas de relance automatique du POST, pas de garantie d'annulation distante, ni de gratuité illimitée.
+- 14 assertions de validation timeline et 7 assertions sur le parseur SSE exécutées avec succès lors de la rédaction. Tests de régression ajoutés dans les deux fichiers de tests ; CI de cette révision non vérifiée. Sources des trois modules relues après publication.
+- Aucune génération GPU ni aucun rendu vidéo réel effectué pendant cette intervention. Timeline, fonctions de montage, effets, export et fournisseurs historiques conservés. Aucun nouveau moteur, aucune nouvelle dépense ni validation de production revendiqués.
+
 ## Pourquoi ce projet ?
 
 Rendre accessible une chaîne de réalisation allant de l'idée au montage exportable, sans confondre les modèles vidéo distants avec le traitement audiovisuel local. La frugalité vient d'une interface JavaScript native et de l'utilisation des capacités du navigateur ; l'inférence vidéo reste externalisée.
