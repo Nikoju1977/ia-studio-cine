@@ -24,6 +24,10 @@ const info={named_endpoints:{'/generate_video':{parameters:[
   {parameter_name:'randomize_seed'}, {parameter_name:'height'}, {parameter_name:'width'}
 ]}}};
 const videoUrl='https://lightricks-ltx-2-3.hf.space/gradio_api/file=/tmp/real.mp4';
+function fragmented(parts){
+ const encoder=new TextEncoder();
+ return new Response(new ReadableStream({start(controller){for(const part of parts)controller.enqueue(encoder.encode(part));controller.close();}}),{headers:{'content-type':'text/event-stream'}});
+}
 const original=globalThis.fetch;
 let posts=0;
 try{
@@ -39,8 +43,7 @@ try{
       return Response.json({event_id:'job-test-123'});
     }
     if(url.endsWith('/call/generate_video/job-test-123'))
-      return new Response('event: generating\ndata: null\n\nevent: complete\ndata: [{"video":{"url":"'+videoUrl+'"}},42]\n\n',
-        {headers:{'content-type':'text/event-stream'}});
+      return fragmented(['event: generating\r','\ndata: null\r\n\r','\nevent: complete\r','\ndata: [{"video":{"url":"'+videoUrl+'"}},42]\r','\n\r','\n']);
     throw new Error('Unexpected URL '+url);
   };
   const got=await generateProVideo({prompt:'Cinematic shot',seconds:4,aspectRatio:'16:9'});
@@ -56,8 +59,7 @@ try{
       return Response.json({event_id:'job-test-456'});
     }
     if(url.endsWith('/call/text_to_video/job-test-456'))
-      return new Response('event: complete\ndata: [{"video":{"url":"https://lightricks-ltx-video-distilled.hf.space/gradio_api/file=/tmp/real.mp4"}},42]\n\n',
-        {headers:{'content-type':'text/event-stream'}});
+      return fragmented(['event: complete\r','\ndata: [{"video":{"url":"https://lightricks-ltx-video-distilled.hf.space/gradio_api/file=/tmp/real.mp4"}},42]']);
     throw new Error('Unexpected LTX 13B URL '+url);
   };
   const backup=await generateFreeVideo({prompt:'A real IA video',seconds:4});
