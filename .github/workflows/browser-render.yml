@@ -16,15 +16,21 @@ permissions:
 jobs:
   chromium-render:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install open-source FFmpeg if absent
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends ffmpeg
+          fi
       - name: Check native tools
         run: |
           node --version
           node -e 'if(typeof WebSocket!=="function")process.exit(1)'
           google-chrome --version
-          ffmpeg -version | head -n 1
-          ffprobe -version | head -n 1
+          ffmpeg -version
+          ffprobe -version
       - name: Encode and decode a real synthetic timeline
         run: node tests/browser-render.cjs
