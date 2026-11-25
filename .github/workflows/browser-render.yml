@@ -1,0 +1,30 @@
+name: Studio Niko - real browser video rendering
+on:
+  push:
+    paths:
+      - 'meta-studio-v5-render.js'
+      - 'tests/**'
+      - '.github/workflows/browser-render.yml'
+  pull_request:
+    paths:
+      - 'meta-studio-v5-render.js'
+      - 'tests/**'
+      - '.github/workflows/browser-render.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  chromium-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Check native tools
+        run: |
+          node --version
+          node -e 'if(typeof WebSocket!=="function")process.exit(1)'
+          google-chrome --version
+          ffmpeg -version | head -n 1
+          ffprobe -version | head -n 1
+      - name: Encode and decode a real synthetic timeline
+        run: node tests/browser-render.cjs
