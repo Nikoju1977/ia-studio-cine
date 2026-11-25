@@ -6,6 +6,45 @@
 
 [Application GitHub Pages (disponibilité non vérifiée)](https://nikoju1977.github.io/ia-studio-cine/) · [Sauvegarde des médias](SAUVEGARDE_MEDIA.md) · [English overview](#english-overview) · [Portfolio](https://github.com/Nikoju1977)
 
+**STUDIO NIKO DESIGN** · Build smart. Stay lightweight. Create without limits.
+
+> [Insérer ici un GIF de démonstration / Insert demo GIF here]
+
+## Pourquoi ce projet ?
+
+Rendre accessible une chaîne de réalisation allant de l'idée au montage exportable, sans confondre les modèles vidéo distants avec le traitement audiovisuel local. La frugalité vient d'une interface JavaScript native et de l'utilisation des capacités du navigateur ; l'inférence vidéo reste externalisée.
+
+## Moteurs, formats et performances — inspection des sources
+
+| Composant | Implémentation observée |
+| --- | --- |
+| [meta-studio-auto-film.js](meta-studio-auto-film.js) | Storyboard déterministe (3, 4 ou 6 plans, 2–8 secondes demandées par plan), prompts de continuité et enchaînement séquentiel. La dernière image peut être réutilisée comme référence lorsque le média est récupérable. |
+| [meta-studio-pro-video.js](meta-studio-pro-video.js) | Connecteur LTX-2.3 via Gradio : découverte des endpoints, upload éventuel, suivi SSE et extraction de l'URL vidéo. |
+| [meta-studio-free-video.js](meta-studio-free-video.js) | Connecteur LTX 13B via Gradio ; les paramètres de durée sont bornés côté client. |
+| [meta-studio-v5-core.js](meta-studio-v5-core.js) | Connecteur Agnes, clés en mémoire, gestion d'état, contrôles d'URL et résultats. |
+| [meta-studio-v5-media.js](meta-studio-v5-media.js) | Timeline vidéo/audio/titres, timecode nominal 24 i/s, outils Canvas et exports d'échange. |
+| [meta-studio-v5-render.js](meta-studio-v5-render.js) | Canvas.captureStream, mixage Web Audio, MediaRecorder, horloge temps réel. |
+| [meta-studio-recovery.js](meta-studio-recovery.js) | Deux générations de métadonnées de montage, limite de 1 400 000 caractères de JSON environ, sans médias binaires. |
+
+### Encodage et performances
+
+Le moteur sélectionne le premier MIME accepté par `MediaRecorder.isTypeSupported` parmi MP4 avec AVC/AAC (`avc1.42E01E,mp4a.40.2`), MP4 générique, WebM VP9/Opus, WebM VP8/Opus et WebM générique. Il ne contient pas un codec propriétaire ; le navigateur choisit l'encodeur effectif.
+
+| Paramètre | Valeur programmée, non mesurée |
+| --- | --- |
+| Rendu HD / Full HD | 1280×720 / 1920×1080 |
+| Cadence nominale | 24 i/s |
+| Débit vidéo demandé | 6 Mbit/s / 12 Mbit/s |
+| Durée maximale | 900 s |
+
+Le débit effectif, la cadence constante, le profil AVC réellement produit, la synchronisation A/V, le temps d'encodage et les performances matérielles ne sont pas garantis. Le contrôle des clips générés par `verifyVideo` vérifie les métadonnées décodées (dimensions et durée), pas chaque image ni la qualité artistique. Le chaînage d'images ne garantit pas la conservation d'un personnage. L'annulation locale n'établit pas l'annulation du calcul distant ou de la facturation.
+
+### Frontières de confidentialité et dépendances
+
+Les prompts et images de référence partent vers les services externes sélectionnés. Les clés Agnes restent en mémoire selon le code inspecté ; les métadonnées et prompts de récupération sont stockés en clair. Les archives ZIP peuvent contenir des médias personnels et ne sont pas chiffrées par le projet. La dépendance ZIP chargée depuis CDN est réelle ; pas de revendication « zéro dépendance ». Les URLs temporaires et les restrictions CORS limitent la récupération. Les licences et conditions des modèles, médias et bibliothèques tiers sont distinctes de la notice du dépôt.
+
+Aucun benchmark, rendu complet, génération LTX/Agnes réelle ou contrôle de disponibilité fournisseur n'a été exécuté pour cette mise à jour. Les quotas et tarifs figurant dans les notes historiques ne sont pas des garanties actuelles.
+
 ## Architecture technique
 
 ```mermaid
@@ -35,17 +74,17 @@ Studio cinéma dans le navigateur : réalisation autonome, connecteurs de géné
 
 **Page principale :** [index.html](./index.html) — **Version :** 6.0.
 
-## Démarrage
+## Quickstart / Démarrage rapide
 1. Lancer un serveur statique dans ce dossier : python3 -m http.server 8000
 2. Ouvrir http://localhost:8000
-3. Dans **Réalisateur autonome V6**, saisir un synopsis, choisir le style et cliquer sur « PRODUIRE LE FILM DE A À Z ». Le mode par défaut utilise LTX-2.3, sans clé ni abonnement. Pour le mode classique, sélectionnez Production → Vidéo ; pour l'image/chat, une clé Agnes reste nécessaire.
+3. Dans **Réalisateur autonome V6**, saisir un synopsis, choisir le style et cliquer sur « PRODUIRE LE FILM DE A À Z ». Le mode par défaut utilise LTX-2.3 via un Space externe, sous réserve de ses conditions et de sa disponibilité. Pour le mode classique, sélectionnez Production → Vidéo ; pour l'image/chat, une clé Agnes reste nécessaire.
 4. Ajouter les résultats à la timeline, créer des overlays, appliquer les looks et exporter.
 
 Les modules JavaScript nécessitent HTTP/HTTPS. Sur GitHub Pages, la génération gratuite passe directement par les API publiques Gradio des Spaces Lightricks ; le navigateur et le Space doivent autoriser les appels CORS. En cas de refus, ouvrir le Space officiel directement. Les appels Agnes peuvent eux aussi être bloqués par CORS.
 
 ## Fonctionnalités
 
-- **LTX 13B (moteur de secours)** : véritable modèle de génération texte→vidéo ou image→vidéo (LTX-Video 13B Distilled), calculé sur les GPU partagés Hugging Face ZeroGPU, sans clé API développeur ni carte bancaire. L’API Gradio accepte le prompt, téléverse éventuellement une image, suit la tâche par événements et ajoute **uniquement le vrai fichier vidéo** renvoyé à la médiathèque. Aucun résultat simulé ni moteur payant automatique.
+- **LTX 13B (moteur de secours)** : véritable modèle de génération texte→vidéo ou image→vidéo (LTX-Video 13B Distilled), calculé sur les GPU partagés Hugging Face ZeroGPU, selon les conditions du Space externe, non revérifiées ici. L’API Gradio accepte le prompt, téléverse éventuellement une image, suit la tâche par événements et ajoute **uniquement le vrai fichier vidéo** renvoyé à la médiathèque. Aucun résultat simulé ni moteur payant automatique.
 
 - **Agnes :** chat et image via Agnes 2.5 ; vidéo via Video 2.5 Flash (720p) ou Video 2.5 (facturation possible avec accord explicite). Génération text-to-video et animation depuis une image importée avec mode keyframe, suivi par video_id, annulation locale et respect du Retry-After lors d’un code 429. Les créations vidéo POST ne sont jamais retentées automatiquement. Plusieurs clés peuvent être chargées en mémoire, sans garantie de quota supplémentaire.
 - **Médiathèque :** imports locaux image et vidéo, previews, ajout à la timeline.
@@ -68,7 +107,7 @@ Les modules JavaScript nécessitent HTTP/HTTPS. Sur GitHub Pages, la génératio
 - Les exports de montage décrivent structure et liens médias, et peuvent nécessiter un relink dans le logiciel cible.
 
 ## Sécurité
-Aucune clé API n’est enregistrée dans le dépôt, localStorage, sessionStorage, les journaux ou les exports. Les clés sont conservées seulement dans la mémoire de l’onglet. Elles sont néanmoins visibles par le navigateur et transmises directement au fournisseur ; pour une protection renforcée, un proxy serveur authentifié est nécessaire.
+Le chemin de configuration inspecté conserve les clés API en mémoire, sans persistance volontaire dans les exports ou le stockage navigateur. Les clés sont conservées seulement dans la mémoire de l’onglet. Elles sont néanmoins visibles par le navigateur et transmises directement au fournisseur ; pour une protection renforcée, un proxy serveur authentifié est nécessaire.
 
 ## Validation
 La CI GitHub teste la syntaxe de meta-studio-v5-core.js, meta-studio-v5-media.js et meta-studio-v5-render.js avec node --check, puis les identifiants HTML, les dépendances et l’absence de stockage de clés grâce à node verify-v5.mjs. Cela ne remplace pas des tests de bout en bout avec Agnes ou un logiciel de montage.
@@ -143,7 +182,25 @@ Un panneau repliable **Récupération après fermeture ou interruption** a été
 3. Pour la génération IA, lancer volontairement un plan court avec le moteur choisi. Conserver le statut du fournisseur et vérifier que le fichier reçu est décodable ; une erreur réseau ne constitue pas un résultat.
 4. Documenter le commit, le navigateur, la résolution, le format et les limites constatées. Aucun de ces essais n'a été exécuté pour cette révision du README.
 
+
+## Roadmap & contribution
+
+Propositions non terminées :
+
+- [ ] Mesurer les images perdues, dérive A/V, débit et mémoire sur un montage synthétique de référence.
+- [ ] Vérifier le rendu HD/Full HD et les MIME effectivement produits sur Chrome, Safari et Firefox, puis sur appareils physiques.
+- [ ] Tester chaque connecteur avec un compte de test autorisé, sans contenu confidentiel, et vérifier les erreurs/quota/CORS.
+- [ ] Valider les échanges EDL/OTIO/FCPXML et la restauration ZIP dans des logiciels cibles ; documenter les médias manquants.
+- [ ] Évaluer un moteur de rendu image par image distinct du mode temps réel, sans annoncer de codec ou de conformité broadcast non implémentés.
+
+**Première contribution / `good first issue` (label proposé, non créé ici) :** Proposer un montage de référence de quelques secondes avec médias synthétiques pour vérifier durée, synchronisation et export.
+
+[Issues](https://github.com/Nikoju1977/ia-studio-cine/issues) : retours reproductibles bienvenus dans le cadre des droits existants. Ne pas publier de clés, médias privés ou documents confidentiels.
+
 ## English overview
+
+The current implementation separates deterministic shot planning, external LTX/Agnes inference and local Canvas/Web Audio rendering. MediaRecorder negotiates browser-supported MP4 or WebM; 24 fps, 6/12 Mbit/s and 15 minutes are requested parameters, not measured performance. Clip metadata checks do not validate the full bitstream or artistic continuity. Recovery stores project structure, not durable binary assets. No new runtime, provider or benchmark tests were performed.
+
 
 META-STUDIO PRO V6 combines rule-based storyboarding, external LTX/Agnes video generation connectors, a media library, a three-track editing timeline and local Canvas/Web Audio/MediaRecorder rendering. External generation requires a working provider, network access, available quotas and compatible CORS. The browser does not run LTX locally. Output is browser-dependent WebM or MP4, not a certified broadcast master or a native 4K AI guarantee. Portable ZIP export and local recovery have different media-retention guarantees; keep original media separately. No fresh generation, runtime test or production deployment was verified during this documentation revision.
 
@@ -152,3 +209,8 @@ META-STUDIO PRO V6 combines rule-based storyboarding, external LTX/Agnes video g
 [Notice de droits d'auteur](LICENSE.md) : publication du code sans licence open source pour les contributions originales concernées. Les composants tiers gardent leurs licences propres. Signaler les erreurs reproductibles sans publier de médias confidentiels, clés API ou jetons.
 
 **Studio Niko Design** · Filmmaking workflows, explicit limits and reproducible evidence.
+
+
+## Licence & auteur / License & author
+
+[Notice de droits](LICENSE.md) © 2026 Studio Niko Design (Nikoju1977). Tous droits réservés pour les contributions originales concernées. Publication publique ≠ licence open source ; les droits et licences tiers demeurent applicables. Aucun fichier de licence n'a été modifié.
